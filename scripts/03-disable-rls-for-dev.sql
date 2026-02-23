@@ -1,0 +1,66 @@
+-- ============================================================================
+-- DISABLE RLS FOR DEVELOPMENT (Temporary)
+-- ============================================================================
+-- 
+-- WARNING: This disables Row Level Security for development/testing.
+-- DO NOT use this in production!
+-- 
+-- This allows the sandbox to work without authentication.
+-- Re-enable RLS before deploying to production.
+--
+-- ============================================================================
+-- Disable RLS on tables that need anonymous access
+ALTER TABLE IF EXISTS events DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS hints DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS submissions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS problems DISABLE ROW LEVEL SECURITY;
+-- Keep RLS enabled for sensitive tables
+-- ALTER TABLE IF EXISTS users ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE IF EXISTS ai_pair_sessions ENABLE ROW LEVEL SECURITY;
+-- ============================================================================
+-- ALTERNATIVE: Permissive Policies for Anonymous Users
+-- ============================================================================
+-- 
+-- If you want to keep RLS enabled but allow anonymous access,
+-- uncomment the policies below instead of disabling RLS:
+--
+-- Allow anonymous users to read active problems
+-- CREATE POLICY IF NOT EXISTS "Anonymous can view active problems" ON problems
+--   FOR SELECT USING (is_active = true);
+-- Allow anonymous users to create and view their own sessions
+-- CREATE POLICY IF NOT EXISTS "Anonymous can create sessions" ON sessions
+--   FOR INSERT WITH CHECK (true);
+-- CREATE POLICY IF NOT EXISTS "Anonymous can view sessions" ON sessions
+--   FOR SELECT USING (true);
+-- CREATE POLICY IF NOT EXISTS "Anonymous can update sessions" ON sessions
+--   FOR UPDATE USING (true);
+-- Allow anonymous users to create and view events
+-- CREATE POLICY IF NOT EXISTS "Anonymous can create events" ON events
+--   FOR INSERT WITH CHECK (true);
+-- CREATE POLICY IF NOT EXISTS "Anonymous can view events" ON events
+--   FOR SELECT USING (true);
+-- Allow anonymous users to create and view hints
+-- CREATE POLICY IF NOT EXISTS "Anonymous can create hints" ON hints
+--   FOR INSERT WITH CHECK (true);
+-- CREATE POLICY IF NOT EXISTS "Anonymous can view hints" ON hints
+--   FOR SELECT USING (true);
+-- Allow anonymous users to create submissions
+-- CREATE POLICY IF NOT EXISTS "Anonymous can create submissions" ON submissions
+--   FOR INSERT WITH CHECK (true);
+-- CREATE POLICY IF NOT EXISTS "Anonymous can view submissions" ON submissions
+--   FOR SELECT USING (true);
+-- ============================================================================
+-- TO RE-ENABLE RLS (Before Production)
+-- ============================================================================
+-- 
+-- Run this before deploying to production:
+--
+-- ALTER TABLE IF EXISTS events ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE IF EXISTS sessions ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE IF EXISTS hints ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE IF EXISTS submissions ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE IF EXISTS problems ENABLE ROW LEVEL SECURITY;
+--
+-- Then apply the policies from 02-rls-policies.sql
+--

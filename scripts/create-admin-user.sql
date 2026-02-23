@@ -1,0 +1,66 @@
+-- ============================================================================
+-- Create Admin User in Supabase
+-- ============================================================================
+-- 
+-- INSTRUCTIONS:
+-- 1. Go to your Supabase Dashboard
+-- 2. Navigate to: Authentication > Users
+-- 3. Click "Add User" button
+-- 4. Fill in:
+--    - Email: admin@auracode.com (or your preferred email)
+--    - Password: (create a strong password)
+--    - Auto Confirm User: YES (check this box)
+-- 5. Click "Create User"
+-- 
+-- The user will be created in the auth.users table automatically.
+-- You can then sign in at /admin with these credentials.
+--
+-- ============================================================================
+-- ALTERNATIVE: Create via SQL (if you have direct database access)
+-- ============================================================================
+--
+-- Note: This is more complex and requires you to hash the password.
+-- It's easier to use the Supabase Dashboard UI method above.
+--
+-- If you still want to use SQL, you'll need to:
+-- 1. Generate a UUID for the user
+-- 2. Hash the password using bcrypt
+-- 3. Insert into auth.users table
+--
+-- Example (you need to replace the hashed password):
+-- 
+-- INSERT INTO auth.users (
+--   id,
+--   instance_id,
+--   email,
+--   encrypted_password,
+--   email_confirmed_at,
+--   created_at,
+--   updated_at,
+--   role,
+--   aud
+-- ) VALUES (
+--   gen_random_uuid(),
+--   '00000000-0000-0000-0000-000000000000',
+--   'admin@auracode.com',
+--   '$2a$10$YOUR_BCRYPT_HASHED_PASSWORD_HERE', -- Replace with actual bcrypt hash
+--   now(),
+--   now(),
+--   now(),
+--   'authenticated',
+--   'authenticated'
+-- );
+--
+-- ============================================================================
+-- RECOMMENDED: Use Supabase Dashboard UI
+-- ============================================================================
+-- 
+-- It's much simpler and safer to create users through the Supabase Dashboard:
+-- 1. Go to: https://supabase.com/dashboard/project/YOUR_PROJECT/auth/users
+-- 2. Click "Add User"
+-- 3. Enter email and password
+-- 4. Check "Auto Confirm User"
+-- 5. Click "Create User"
+--
+-- Then you can sign in at: http://localhost:3000/admin
+--
