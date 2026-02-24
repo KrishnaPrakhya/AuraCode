@@ -5,6 +5,9 @@ __v0_jsx-dev-runtime.ts
 
 # Common ignores
 node_modules/
+fastapi-backend/.venv/
+fastapi-backend/env
+fastapi-backend/.env
 .next/
 .env*.local
 .DS_Store

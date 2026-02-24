@@ -2,8 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useRef, useState, useEffect } from "react";
-import { ReactPreview } from "./ReactPreview";
-import { Sparkles, Lightbulb, Code2, Eye, Loader2 } from "lucide-react";
+import { ReactPreview, type FileEntry } from "./ReactPreview";
+import { Sparkles, Lightbulb, Code2, Eye, Loader2, Plus, X } from "lucide-react";
 import type { ProgrammingLanguage } from "@/lib/types/database";
 
 // Dynamically import Monaco Editor to avoid SSR issues
@@ -57,27 +57,41 @@ export function CodeEditor({
   const [activePane, setActivePane] = useState<"code" | "preview" | "split">(
     "split",
   );
-  // Debounced code for the preview pane — avoids re-rendering iframe on every keystroke
-  const [previewCode, setPreviewCode] = useState(defaultValue);
+
+  // ── Multi-file state ──────────────────────────────────────────────────────
+  const [files, setFiles] = useState<FileEntry[]>([
+    { name: "App.tsx", code: defaultValue },
+  ]);
+  const [activeFile, setActiveFile] = useState("App.tsx");
+  const [newFileName, setNewFileName] = useState("");
+  const [showNewFileInput, setShowNewFileInput] = useState(false);
+
+  const currentFileCode =
+    files.find((f) => f.name === activeFile)?.code ?? defaultValue;
 
   const monacoLang = language === "typescript" ? "typescript" : "javascript";
 
-  // When resetKey changes (new problem loaded), sync preview immediately
+  // When resetKey changes (new problem loaded), reset to single App.tsx with fresh code
   useEffect(() => {
     currentCodeRef.current = defaultValue;
-    setPreviewCode(defaultValue);
+    setFiles([{ name: "App.tsx", code: defaultValue }]);
+    setActiveFile("App.tsx");
+    setShowNewFileInput(false);
   }, [resetKey, defaultValue]);
 
-  // Monaco onChange — update ref + notify parent + debounce preview
+  // Monaco onChange — update current file + notify parent (App.tsx = main code for DB)
   const handleMonacoChange = useCallback(
     (v: string | undefined) => {
       const code = v ?? "";
       currentCodeRef.current = code;
+      // Update only the active file in the files array
+      setFiles((prev) =>
+        prev.map((f) => (f.name === activeFile ? { ...f, code } : f)),
+      );
+      // Notify parent with the entry file's content (for DB save)
       onChange(code);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => setPreviewCode(code), 600);
     },
-    [onChange],
+    [onChange, activeFile],
   );
 
   // Evaluate uses ref so it always has the latest code without depending on parent state
@@ -153,11 +167,50 @@ export function CodeEditor({
     });
   }, []);
 
+  // ── File management ──────────────────────────────────────────────────────
+
+  const handleSwitchFile = useCallback(
+    (name: string) => {
+      // Save Monaco's current content into files before switching
+      if (editorRef.current) {
+        const current = editorRef.current.getValue() as string;
+        setFiles((prev) =>
+          prev.map((f) => (f.name === activeFile ? { ...f, code: current } : f)),
+        );
+      }
+      setActiveFile(name);
+    },
+    [activeFile],
+  );
+
+  const handleAddFile = useCallback(() => {
+    const raw = newFileName.trim();
+    if (!raw) return;
+    const name = raw.includes(".") ? raw : `${raw}.tsx`;
+    if (files.some((f) => f.name === name)) return; // already exists
+    const newFile: FileEntry = { name, code: `// ${name}\n` };
+    setFiles((prev) => [...prev, newFile]);
+    setActiveFile(name);
+    setNewFileName("");
+    setShowNewFileInput(false);
+  }, [newFileName, files]);
+
+  const handleDeleteFile = useCallback(
+    (name: string) => {
+      if (files.length === 1) return; // cannot delete last file
+      setFiles((prev) => prev.filter((f) => f.name !== name));
+      if (activeFile === name) {
+        setActiveFile(files.find((f) => f.name !== name)?.name ?? "App.tsx");
+      }
+    },
+    [files, activeFile],
+  );
+
   return (
     <div className="flex h-full flex-col bg-slate-950 text-slate-100">
-      {/* Toolbar */}
+      {/* ── Top toolbar ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between border-b border-slate-700 bg-slate-900 px-3 py-2">
-        {/* Left: Pane switcher */}
+        {/* Pane switcher */}
         <div className="flex items-center gap-1 rounded-lg bg-slate-800 p-1">
           <button
             onClick={() => setActivePane("code")}
@@ -193,13 +246,12 @@ export function CodeEditor({
           </button>
         </div>
 
-        {/* Right: actions */}
+        {/* Actions */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleHint(1)}
             disabled={isEvaluating}
             className="flex items-center gap-1.5 rounded-lg bg-amber-900/30 border border-amber-700/40 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-900/50 disabled:opacity-50 transition"
-            title="Get a React coaching hint"
           >
             <Lightbulb className="h-3.5 w-3.5" />
             Hint
@@ -228,9 +280,9 @@ export function CodeEditor({
         </div>
       </div>
 
-      {/* Editor + Preview Area */}
+      {/* ── Editor + Preview Area ────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Code editor pane — keyed by resetKey so it remounts only on problem change */}
+        {/* Code editor pane */}
         {(activePane === "code" || activePane === "split") && (
           <div
             className={`flex flex-col overflow-hidden ${
@@ -239,15 +291,88 @@ export function CodeEditor({
                 : "w-full"
             }`}
           >
+            {/* ── File tabs ─────────────────────────────────────────────── */}
+            <div className="flex items-center gap-0 overflow-x-auto border-b border-slate-700 bg-slate-900 scrollbar-none">
+              {files.map((f) => (
+                <div
+                  key={f.name}
+                  className={`group flex shrink-0 items-center gap-1.5 border-r border-slate-700 px-3 py-1.5 text-xs cursor-pointer transition ${
+                    f.name === activeFile
+                      ? "bg-slate-950 text-white border-b-2 border-b-violet-500"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  }`}
+                  onClick={() => handleSwitchFile(f.name)}
+                >
+                  <span>{f.name}</span>
+                  {files.length > 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteFile(f.name);
+                      }}
+                      className="hidden group-hover:flex h-3.5 w-3.5 items-center justify-center rounded hover:bg-slate-600 text-slate-500 hover:text-red-400 transition"
+                      title={`Delete ${f.name}`}
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {/* New file input / button */}
+              {showNewFileInput ? (
+                <div className="flex items-center gap-1 px-2">
+                  <input
+                    autoFocus
+                    value={newFileName}
+                    onChange={(e) => setNewFileName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddFile();
+                      if (e.key === "Escape") {
+                        setShowNewFileInput(false);
+                        setNewFileName("");
+                      }
+                    }}
+                    placeholder="Button.tsx"
+                    className="w-28 rounded border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs text-slate-100 placeholder-slate-500 outline-none focus:border-violet-500"
+                  />
+                  <button
+                    onClick={handleAddFile}
+                    className="text-xs text-violet-400 hover:text-violet-300"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowNewFileInput(false);
+                      setNewFileName("");
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-300"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowNewFileInput(true)}
+                  className="flex shrink-0 items-center gap-1 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition"
+                  title="New file"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Monaco — key includes activeFile so it remounts per file */}
             <MonacoEditor
-              key={resetKey || "editor"}
+              key={`${resetKey || "editor"}-${activeFile}`}
               height="100%"
               language={monacoLang}
-              defaultValue={defaultValue}
+              defaultValue={currentFileCode}
               onChange={handleMonacoChange}
               onMount={handleEditorMount}
               theme="vs-dark"
-              path={`component-${resetKey || "default"}.${language === "typescript" ? "tsx" : "jsx"}`}
+              path={`file:///sandbox/${activeFile}`}
               options={{
                 minimap: { enabled: false },
                 lineNumbers: "on",
@@ -262,11 +387,11 @@ export function CodeEditor({
           </div>
         )}
 
-        {/* Preview pane — receives debounced code, never triggers editor remount */}
+        {/* Preview pane — receives all files for multi-file rendering */}
         {(activePane === "preview" || activePane === "split") && (
           <div className={activePane === "split" ? "w-1/2" : "w-full"}>
             <ReactPreview
-              code={previewCode}
+              files={files}
               language={language === "typescript" ? "typescript" : "javascript"}
             />
           </div>
