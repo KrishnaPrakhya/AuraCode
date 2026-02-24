@@ -87,7 +87,14 @@ export function CodeEditor({
   const [hintResponse, setHintResponse] = useState<string | null>(null);
   const hintInputRef = useRef<HTMLInputElement>(null);
 
-  const QUICK_TAGS = ["useState", "useEffect", "filtering", "rendering", "props", "event handler"];
+  const QUICK_TAGS = [
+    "useState",
+    "useEffect",
+    "filtering",
+    "rendering",
+    "props",
+    "event handler",
+  ];
 
   // Close hint dialog and reset
   const closeHintDialog = () => {
@@ -104,7 +111,9 @@ export function CodeEditor({
     setHintResponse(null);
     try {
       const hint = await onHintRequest(1, q);
-      setHintResponse(hint || "No hint available right now. Try being more specific!");
+      setHintResponse(
+        hint || "No hint available right now. Try being more specific!",
+      );
     } catch {
       setHintResponse("Couldn't get a hint — please try again.");
     } finally {
@@ -163,12 +172,9 @@ export function CodeEditor({
     }
   }, [onEvaluate]);
 
-  const handleHint = useCallback(
-    async (level: number) => {
-      setShowHintDialog(true);
-    },
-    [],
-  );
+  const handleHint = useCallback(async (level: number) => {
+    setShowHintDialog(true);
+  }, []);
 
   const handleEditorMount = useCallback((editor: any, monaco: any) => {
     editorRef.current = editor;
@@ -309,24 +315,34 @@ export function CodeEditor({
           {/* Hint button — shows count + opens question dialog */}
           <div className="relative">
             <button
-              onClick={() => hintsUsedCount < MAX_HINTS && setShowHintDialog((v) => !v)}
+              onClick={() =>
+                hintsUsedCount < MAX_HINTS && setShowHintDialog((v) => !v)
+              }
               disabled={isEvaluating || hintsUsedCount >= MAX_HINTS}
               className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
                 hintsUsedCount >= MAX_HINTS
                   ? "border-slate-700 bg-slate-800/50 text-slate-500 cursor-not-allowed"
                   : showHintDialog
-                  ? "border-amber-500/60 bg-amber-500/20 text-amber-200"
-                  : "border-amber-500/25 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                    ? "border-amber-500/60 bg-amber-500/20 text-amber-200"
+                    : "border-amber-500/25 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
               }`}
             >
               <Lightbulb className="h-3.5 w-3.5" />
               Hint
-              <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${
-                hintsUsedCount >= MAX_HINTS ? "bg-slate-700 text-slate-400" : "bg-amber-500/25 text-amber-300"
-              }`}>
+              <span
+                className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${
+                  hintsUsedCount >= MAX_HINTS
+                    ? "bg-slate-700 text-slate-400"
+                    : "bg-amber-500/25 text-amber-300"
+                }`}
+              >
                 {hintsUsedCount}/{MAX_HINTS}
               </span>
-              {hintsUsedCount < MAX_HINTS && <ChevronDown className={`h-3 w-3 transition-transform ${showHintDialog ? "rotate-180" : ""}`} />}
+              {hintsUsedCount < MAX_HINTS && (
+                <ChevronDown
+                  className={`h-3 w-3 transition-transform ${showHintDialog ? "rotate-180" : ""}`}
+                />
+              )}
             </button>
 
             {/* Hint dialog dropdown */}
@@ -336,9 +352,14 @@ export function CodeEditor({
                 <div className="flex items-center justify-between border-b border-slate-700/60 px-4 py-3">
                   <div className="flex items-center gap-2">
                     <Lightbulb className="h-4 w-4 text-amber-400" />
-                    <span className="text-sm font-semibold text-amber-300">Ask for a Hint</span>
+                    <span className="text-sm font-semibold text-amber-300">
+                      Ask for a Hint
+                    </span>
                   </div>
-                  <button onClick={closeHintDialog} className="text-slate-500 hover:text-slate-300 transition">
+                  <button
+                    onClick={closeHintDialog}
+                    className="text-slate-500 hover:text-slate-300 transition"
+                  >
                     <X className="h-4 w-4" />
                   </button>
                 </div>
@@ -346,7 +367,9 @@ export function CodeEditor({
                 <div className="p-4 space-y-3">
                   {/* Question input */}
                   <div>
-                    <p className="mb-2 text-xs text-slate-400">What are you stuck on? Be specific.</p>
+                    <p className="mb-2 text-xs text-slate-400">
+                      What are you stuck on? Be specific.
+                    </p>
                     <div className="flex gap-2">
                       <input
                         ref={hintInputRef}
@@ -362,7 +385,11 @@ export function CodeEditor({
                         disabled={!hintQuestion.trim() || hintLoading}
                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 disabled:opacity-40 transition"
                       >
-                        {hintLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                        {hintLoading ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Send className="h-3.5 w-3.5" />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -386,7 +413,9 @@ export function CodeEditor({
                   {hintLoading && (
                     <div className="flex items-center gap-2 rounded-lg border border-amber-700/30 bg-amber-900/10 px-3 py-3">
                       <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
-                      <span className="text-xs text-amber-300/70">Getting your hint…</span>
+                      <span className="text-xs text-amber-300/70">
+                        Getting your hint…
+                      </span>
                     </div>
                   )}
 
@@ -395,10 +424,16 @@ export function CodeEditor({
                     <div className="rounded-lg border border-amber-700/30 bg-amber-900/10 p-3">
                       <div className="flex items-start gap-2">
                         <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
-                        <p className="text-xs leading-relaxed text-amber-100">{hintResponse}</p>
+                        <p className="text-xs leading-relaxed text-amber-100">
+                          {hintResponse}
+                        </p>
                       </div>
                       <button
-                        onClick={() => { setHintResponse(null); setHintQuestion(""); setTimeout(() => hintInputRef.current?.focus(), 50); }}
+                        onClick={() => {
+                          setHintResponse(null);
+                          setHintQuestion("");
+                          setTimeout(() => hintInputRef.current?.focus(), 50);
+                        }}
                         className="mt-2 text-[11px] text-amber-500/60 hover:text-amber-400 transition"
                       >
                         Ask another →
@@ -406,7 +441,10 @@ export function CodeEditor({
                     </div>
                   )}
 
-                  <p className="text-center text-[10px] text-slate-600">{MAX_HINTS - hintsUsedCount} hint{MAX_HINTS - hintsUsedCount !== 1 ? "s" : ""} remaining</p>
+                  <p className="text-center text-[10px] text-slate-600">
+                    {MAX_HINTS - hintsUsedCount} hint
+                    {MAX_HINTS - hintsUsedCount !== 1 ? "s" : ""} remaining
+                  </p>
                 </div>
               </div>
             )}
@@ -438,9 +476,16 @@ export function CodeEditor({
 
       {/* ── Editor + Preview Area ────────────────────────────────────────── */}
       {activePane === "split" ? (
-        <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+        <ResizablePanelGroup
+          direction="horizontal"
+          className="flex-1 overflow-hidden"
+        >
           {/* Code editor pane */}
-          <ResizablePanel defaultSize={50} minSize={25} className="flex flex-col overflow-hidden border-r border-slate-700">
+          <ResizablePanel
+            defaultSize={50}
+            minSize={25}
+            className="flex flex-col overflow-hidden border-r border-slate-700"
+          >
             {/* ── File tabs ─────────────────────────────────────────────── */}
             <div className="flex items-center gap-0 overflow-x-auto border-b border-slate-700/60 bg-[#0d1117] scrollbar-none">
               {files.map((f) => (
@@ -536,10 +581,17 @@ export function CodeEditor({
             />
           </ResizablePanel>
 
-          <ResizableHandle withHandle className="w-1.5 bg-slate-800 hover:bg-violet-600/50 transition-colors" />
+          <ResizableHandle
+            withHandle
+            className="w-1.5 bg-slate-800 hover:bg-violet-600/50 transition-colors"
+          />
 
           {/* Preview pane */}
-          <ResizablePanel defaultSize={50} minSize={20} className="overflow-hidden">
+          <ResizablePanel
+            defaultSize={50}
+            minSize={20}
+            className="overflow-hidden"
+          >
             <ReactPreview
               files={files}
               language={language === "typescript" ? "typescript" : "javascript"}
@@ -586,16 +638,36 @@ export function CodeEditor({
                       onChange={(e) => setNewFileName(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleAddFile();
-                        if (e.key === "Escape") { setShowNewFileInput(false); setNewFileName(""); }
+                        if (e.key === "Escape") {
+                          setShowNewFileInput(false);
+                          setNewFileName("");
+                        }
                       }}
                       placeholder="Button.tsx"
                       className="w-28 rounded border border-slate-600 bg-slate-800 px-2 py-0.5 text-xs text-slate-100 placeholder-slate-500 outline-none focus:border-violet-500"
                     />
-                    <button onClick={handleAddFile} className="text-xs text-violet-400 hover:text-violet-300">Add</button>
-                    <button onClick={() => { setShowNewFileInput(false); setNewFileName(""); }} className="text-xs text-slate-500 hover:text-slate-300">✕</button>
+                    <button
+                      onClick={handleAddFile}
+                      className="text-xs text-violet-400 hover:text-violet-300"
+                    >
+                      Add
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowNewFileInput(false);
+                        setNewFileName("");
+                      }}
+                      className="text-xs text-slate-500 hover:text-slate-300"
+                    >
+                      ✕
+                    </button>
                   </div>
                 ) : (
-                  <button onClick={() => setShowNewFileInput(true)} className="flex shrink-0 items-center gap-1 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition" title="New file">
+                  <button
+                    onClick={() => setShowNewFileInput(true)}
+                    className="flex shrink-0 items-center gap-1 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition"
+                    title="New file"
+                  >
                     <Plus className="h-3 w-3" />
                   </button>
                 )}
@@ -609,7 +681,16 @@ export function CodeEditor({
                 onMount={handleEditorMount}
                 theme="vs-dark"
                 path={`file:///sandbox/${activeFile}`}
-                options={{ minimap: { enabled: false }, lineNumbers: "on", automaticLayout: true, fontSize: 14, wordWrap: "on", scrollBeyondLastLine: false, padding: { top: 16, bottom: 16 }, tabSize: 2 }}
+                options={{
+                  minimap: { enabled: false },
+                  lineNumbers: "on",
+                  automaticLayout: true,
+                  fontSize: 14,
+                  wordWrap: "on",
+                  scrollBeyondLastLine: false,
+                  padding: { top: 16, bottom: 16 },
+                  tabSize: 2,
+                }}
               />
             </div>
           )}
@@ -618,7 +699,9 @@ export function CodeEditor({
             <div className="w-full">
               <ReactPreview
                 files={files}
-                language={language === "typescript" ? "typescript" : "javascript"}
+                language={
+                  language === "typescript" ? "typescript" : "javascript"
+                }
               />
             </div>
           )}
