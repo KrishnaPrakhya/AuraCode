@@ -6,6 +6,3 @@ python-dotenv>=1.0.1
 
 # AI - Google Gemini
 google-generativeai>=0.3.0
-
-# Execution & Infrastructure
-docker>=7.1.0
