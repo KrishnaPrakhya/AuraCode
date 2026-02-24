@@ -11,3 +11,6 @@ fastapi-backend/.env
 .next/
 .env*.local
 .DS_Store
+fastapi-backend/__pycache__
+fastapi-backend/routes/__pycache__
+fastapi-backend/services/__pycache__
