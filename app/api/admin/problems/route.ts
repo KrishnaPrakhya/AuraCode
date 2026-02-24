@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseClient } from '@/lib/supabase/client';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 /**
@@ -8,7 +7,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
  */
 export async function GET() {
   try {
-    const supabase = getSupabaseClient();
+    const supabase = getSupabaseAdmin();
 
     // Get all active problems
     const { data: problems, error } = await supabase
@@ -19,16 +18,49 @@ export async function GET() {
 
     if (error) {
       console.error('[Admin API] Error loading problems:', error);
+
+      // Detect network/timeout errors and give a helpful message
+      const isNetworkError =
+        error.message?.includes('fetch failed') ||
+        error.message?.includes('ConnectTimeout') ||
+        error.message?.includes('ECONNREFUSED');
+
+      if (isNetworkError) {
+        return NextResponse.json(
+          {
+            error:
+              'Cannot reach the database. The Supabase project may be paused. ' +
+              'Visit https://supabase.com/dashboard to restore it.',
+          },
+          { status: 503 }
+        );
+      }
+
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json(problems || []);
-  } catch (error) {
-    console.error('[Admin API] Unexpected error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[Admin API] Unexpected error loading problems:', message);
+
+    const isNetworkError =
+      message.includes('fetch failed') ||
+      message.includes('ConnectTimeout') ||
+      message.includes('ECONNREFUSED');
+
+    if (isNetworkError) {
+      return NextResponse.json(
+        {
+          error:
+            'Cannot reach the database. The Supabase project may be paused. ' +
+            'Visit https://supabase.com/dashboard to restore it.',
+        },
+        { status: 503 }
+      );
+    }
+
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 

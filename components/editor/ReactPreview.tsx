@@ -202,8 +202,12 @@ export function ReactPreview({
             <div className="h-3 w-3 rounded-full bg-yellow-400" />
             <div className="h-3 w-3 rounded-full bg-green-400" />
           </div>
-          <span className="text-xs font-medium text-slate-500">Live Preview</span>
-          {isLoading && <RefreshCw className="h-3 w-3 animate-spin text-slate-400" />}
+          <span className="text-xs font-medium text-slate-500">
+            Live Preview
+          </span>
+          {isLoading && (
+            <RefreshCw className="h-3 w-3 animate-spin text-slate-400" />
+          )}
         </div>
         <button
           onClick={refresh}
@@ -218,7 +222,9 @@ export function ReactPreview({
       {error && (
         <div className="flex items-start gap-2 border-b border-red-200 bg-red-50 px-3 py-2">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-          <pre className="flex-1 overflow-x-auto text-xs text-red-700 whitespace-pre-wrap">{error}</pre>
+          <pre className="flex-1 overflow-x-auto text-xs text-red-700 whitespace-pre-wrap">
+            {error}
+          </pre>
         </div>
       )}
 
@@ -226,7 +232,9 @@ export function ReactPreview({
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <ExternalLink className="mx-auto mb-3 h-8 w-8 text-slate-300" />
-            <p className="text-sm text-slate-400">Start writing React code to see a live preview</p>
+            <p className="text-sm text-slate-400">
+              Start writing React code to see a live preview
+            </p>
             <p className="mt-1 text-xs text-slate-400">
               Export a default component named{" "}
               <code className="rounded bg-slate-100 px-1">App</code>

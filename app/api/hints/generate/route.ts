@@ -1,12 +1,126 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { HintRequest, HintResponse } from '@/lib/types/database';
-import { getSupabaseClient } from '@/lib/supabase/client';
+
+const GEMINI_URL =
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=` +
+  process.env.GEMINI_API_KEY;
+
+async function callGemini(prompt: string, maxTokens = 120): Promise<string> {
+  const res = await fetch(GEMINI_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 },
+    }),
+  });
+  if (!res.ok) throw new Error(`Gemini ${res.status}`);
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+}
 
 /**
- * Hint Generation Endpoint
- * Sends code evaluation request to LangGraph AI Mentor Agent backend
+ * Targeted Hint Generation — powered by Gemini directly.
+ *
+ * Expected body:
+ *   user_question   - what the student is specifically stuck on (required)
+ *   current_code    - their current editor code
+ *   challenge_title - name of the challenge
+ *   challenge_description
+ *   requirements    - string[]
+ *   hint_number     - how many hints already used (0-indexed) → adjusts strictness
+ *   session_id / user_id / problem_id — for DB logging (best-effort)
  */
 export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const {
+      user_question,
+      current_code = '',
+      challenge_title = 'React Challenge',
+      challenge_description = '',
+      requirements = [],
+      hint_number = 0,
+    } = body;
+
+    if (!user_question?.trim()) {
+      return NextResponse.json({ error: 'user_question is required' }, { status: 400 });
+    }
+
+    const MAX_HINTS = 10;
+    if (hint_number >= MAX_HINTS) {
+      return NextResponse.json(
+        { error: 'Hint limit reached (10/10)', hint: null, limit_reached: true },
+        { status: 200 }
+      );
+    }
+
+    // Strictness increases as hints are used (earlier hints = gentler nudge)
+    const strictnessNote =
+      hint_number < 3
+        ? 'Be very gentle — only a nudge, no code examples yet.'
+        : hint_number < 6
+        ? 'Give directional guidance. A tiny code snippet (2-3 lines max) is okay if essential.'
+        : 'Give a focused pointer with a small code snippet only if the student is significantly stuck.';
+
+    const reqList = requirements.length
+      ? requirements.map((r: string, i: number) => `${i + 1}. ${r}`).join('\n')
+      : '(no requirements listed)';
+
+    const codeSnippet = current_code.trim()
+      ? `\`\`\`tsx\n${current_code.slice(0, 1200)}\n\`\`\``
+      : '(no code written yet)';
+
+    const prompt = `You are a strict React mentor in a timed hackathon. Your job is to give small, targeted hints — NOT solutions.
+
+RULES (follow exactly):
+- Answer ONLY what the student asked. Nothing more.
+- Keep the response to 2–3 sentences maximum.
+- NEVER show a complete working solution.
+- NEVER reveal the full implementation logic.
+- Use React/TypeScript terminology correctly.
+- ${strictnessNote}
+
+Challenge: ${challenge_title}
+Description: ${challenge_description}
+
+Requirements:
+${reqList}
+
+Student's current code:
+${codeSnippet}
+
+Student's specific question / what they're stuck on:
+"${user_question}"
+
+Reply with ONLY the concise hint (2-3 sentences). No preamble, no "Great question!", no summary at the end.`;
+
+    let hint: string;
+    try {
+      hint = await callGemini(prompt, 130);
+    } catch {
+      // Gemini unavailable — targeted fallback based on question keywords
+      const q = user_question.toLowerCase();
+      if (q.includes('state') || q.includes('usestate'))
+        hint = `Use \`useState\` to declare reactive data — each changing value needs its own state variable. Call the setter function to update it and trigger a re-render.`;
+      else if (q.includes('filter') || q.includes('list'))
+        hint = `Use \`Array.filter()\` on your state array and store the result in a variable (or use \`useMemo\`). Render the filtered array with \`.map()\`.`;
+      else if (q.includes('effect') || q.includes('useeffect'))
+        hint = `\`useEffect\` runs after every render by default. Pass a dependency array \`[]\` to run only once, or include specific values to re-run when they change.`;
+      else
+        hint = `Break the problem down: first get the UI rendering, then add state, then wire up the event handlers one at a time.`;
+    }
+
+    return NextResponse.json({
+      hint,
+      hint_number: hint_number + 1,
+      hints_remaining: MAX_HINTS - hint_number - 1,
+      limit_reached: hint_number + 1 >= MAX_HINTS,
+    });
+  } catch (error) {
+    console.error('[hints] error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+}
+
   try {
     const body: HintRequest = await request.json();
     const {

@@ -14,7 +14,7 @@ import {
   TrendingUp,
   Activity,
   Lightbulb,
-  Sparkles,
+  Zap,
   Trophy,
 } from "lucide-react";
 import type { ParticipantRecord } from "@/app/api/admin/participants/route";
@@ -105,15 +105,15 @@ export function AnalyticsPanel(_props: AnalyticsPanelProps) {
             color: "amber",
           },
           {
-            icon: Sparkles,
-            label: "AI Evals",
+            icon: Zap,
+            label: "AI Coach",
             value: aiEvalCount,
             color: "pink",
           },
         ].map(({ icon: Icon, label, value, color }) => (
           <div
             key={label}
-            className={`rounded-xl border border-${color}-500/30 bg-gradient-to-br from-${color}-900/30 to-${color}-800/20 backdrop-blur p-4 shadow`}
+            className={`rounded-xl border border-${color}-500/30 bg-linear-to-br from-${color}-900/30 to-${color}-800/20 backdrop-blur p-4 shadow`}
           >
             <div className="flex items-center gap-2 mb-1">
               <Icon className={`h-4 w-4 text-${color}-400`} />
@@ -125,7 +125,7 @@ export function AnalyticsPanel(_props: AnalyticsPanelProps) {
       </div>
 
       {/* Score chart */}
-      <div className="rounded-xl border border-slate-700/50 bg-gradient-to-br from-slate-900/80 to-slate-800/50 backdrop-blur p-5 shadow-xl">
+      <div className="rounded-xl border border-slate-700/50 bg-linear-to-br from-slate-900/80 to-slate-800/50 backdrop-blur p-5 shadow-xl">
         <h3 className="text-sm font-semibold text-slate-200 mb-4">
           Score Distribution (top 10)
         </h3>
@@ -176,7 +176,7 @@ export function AnalyticsPanel(_props: AnalyticsPanelProps) {
       </div>
 
       {/* Leaderboard */}
-      <div className="rounded-xl border border-slate-700/50 bg-gradient-to-br from-slate-900/80 to-slate-800/50 backdrop-blur p-5 shadow-xl">
+      <div className="rounded-xl border border-slate-700/50 bg-linear-to-br from-slate-900/80 to-slate-800/50 backdrop-blur p-5 shadow-xl">
         <h3 className="text-sm font-semibold text-slate-200 mb-4 flex items-center gap-2">
           <Trophy className="h-4 w-4 text-amber-400" />
           Leaderboard
@@ -197,16 +197,16 @@ export function AnalyticsPanel(_props: AnalyticsPanelProps) {
               return (
                 <div key={r.session_id} className="flex items-center gap-3">
                   <div
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white ${medalColors[i] ?? "from-slate-700 to-slate-600"}`}
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-linear-to-br text-xs font-bold text-white ${medalColors[i] ?? "from-slate-700 to-slate-600"}`}
                   >
                     {i + 1}
                   </div>
-                  <div className="min-w-[100px] text-sm font-medium text-slate-200 truncate">
+                  <div className="min-w-25 text-sm font-medium text-slate-200 truncate">
                     {r.user_name}
                   </div>
                   <div className="flex-1 h-2 rounded-full bg-slate-700/50 overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all"
+                      className="h-full rounded-full bg-linear-to-r from-violet-500 to-blue-500 transition-all"
                       style={{ width: `${barW}%` }}
                     />
                   </div>
