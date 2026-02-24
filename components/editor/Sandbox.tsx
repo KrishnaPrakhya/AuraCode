@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { CodeEditor } from "./CodeEditor";
 import { ProblemPanel } from "./ProblemPanel";
 import { PairProgrammer } from "./PairProgrammer";
@@ -8,7 +8,7 @@ import { AIEvaluationPanel, type EvaluationResult } from "./AIEvaluationPanel";
 import { useCodeEditor } from "@/lib/hooks/useCodeEditor";
 import { problemRepository } from "@/lib/supabase/repositories/problems";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { Zap, Save, CheckCheck, CloudUpload } from "lucide-react";
+import { Zap, Save, CheckCheck, CloudUpload, Timer, Trophy } from "lucide-react";
 import type { Problem, ProgrammingLanguage } from "@/lib/types/database";
 
 // localStorage keys for persisting per-user, per-problem state
@@ -131,6 +131,14 @@ export function Sandbox({
   const [lastSavedCode, setLastSavedCode] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+
+  // Countdown timer
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    timerRef.current = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, []);
 
   const {
     code,
@@ -525,28 +533,60 @@ export function Sandbox({
     );
   }
 
+  const timeLimitSecs = (problem.time_limit_minutes || 45) * 60;
+  const remaining = Math.max(0, timeLimitSecs - elapsedSeconds);
+  const remainingMins = Math.floor(remaining / 60);
+  const remainingSecs = remaining % 60;
+  const timerPct = Math.min(100, (elapsedSeconds / timeLimitSecs) * 100);
+  const timerColor =
+    remaining > 600 ? "text-emerald-400" : remaining > 180 ? "text-amber-400" : "text-red-400";
+  const timerBarColor =
+    remaining > 600 ? "bg-emerald-500" : remaining > 180 ? "bg-amber-500" : "bg-red-500";
+
+  const userAvatar = typeof window !== "undefined"
+    ? localStorage.getItem("aura_avatar") ?? "🧑‍💻"
+    : "🧑‍💻";
+
   return (
     <div className="flex h-full w-full flex-col bg-slate-950">
       {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-slate-700/50 bg-slate-900 px-4 py-2">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-blue-500">
-            <span className="text-xs font-bold text-white">A</span>
+      <div className="flex items-center justify-between border-b border-slate-700/50 bg-[#0d1117] px-4 py-2 gap-4">
+        {/* Left: brand + problem title */}
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-violet-500 to-indigo-600 text-xs font-bold text-white shadow shadow-violet-500/30">
+            ⚛
           </div>
-          <span className="text-sm font-semibold text-slate-200">AuraCode</span>
-          <span className="text-slate-600">/</span>
-          <span className="text-sm text-slate-400">{problem.title}</span>
-          {userName && (
-            <>
-              <span className="text-slate-600">/</span>
-              <span className="rounded-full bg-violet-900/40 px-2 py-0.5 text-xs font-medium text-violet-300">
-                {userName}
-              </span>
-            </>
-          )}
+          <span className="text-sm font-semibold text-white hidden md:block">AuraCode</span>
+          <span className="text-slate-600 hidden md:block">/</span>
+          <span className="text-sm text-slate-400 truncate max-w-50">{problem.title}</span>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Save indicator / button */}
+
+        {/* Center: timer */}
+        <div className="flex items-center gap-2 shrink-0">
+          <Timer className={`h-3.5 w-3.5 ${timerColor}`} />
+          <span className={`text-sm font-mono font-bold tabular-nums ${timerColor}`}>
+            {String(remainingMins).padStart(2, "0")}:{String(remainingSecs).padStart(2, "0")}
+          </span>
+          {/* Progress bar */}
+          <div className="hidden md:block w-20 h-1.5 rounded-full bg-white/8 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${timerBarColor}`}
+              style={{ width: `${timerPct}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Right: actions + user */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Evaluation score badge */}
+          {evaluationResult && (
+            <div className="hidden md:flex items-center gap-1.5 rounded-lg border border-violet-700/40 bg-violet-900/20 px-3 py-1.5">
+              <Trophy className="h-3.5 w-3.5 text-violet-400" />
+              <span className="text-xs font-bold text-violet-300">{evaluationResult.overall_score}/100</span>
+            </div>
+          )}
+
+          {/* Save status */}
           {savedFlash ? (
             <span className="flex items-center gap-1.5 rounded-lg border border-emerald-700/40 bg-emerald-900/20 px-3 py-1.5 text-xs font-medium text-emerald-300">
               <CheckCheck className="h-3.5 w-3.5" />
@@ -563,23 +603,32 @@ export function Sandbox({
               ) : (
                 <Save className="h-3.5 w-3.5" />
               )}
-              Save
+              <span className="hidden sm:inline">Save</span>
             </button>
           ) : null}
+
           <button
             onClick={() => setShowPairProgrammer(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-emerald-700/40 bg-emerald-900/20 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-900/40 transition"
+            className="flex items-center gap-1.5 rounded-lg border border-emerald-700/40 bg-emerald-900/20 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-900/40 transition"
           >
             <Zap className="h-3.5 w-3.5" />
-            AI Pair Programmer
+            <span className="hidden sm:inline">AI Coach</span>
           </button>
+
+          {/* User chip */}
+          {userName && (
+            <div className="flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/8 px-2 py-1.5">
+              <span className="text-sm">{userAvatar}</span>
+              <span className="text-xs font-medium text-slate-300 hidden md:block">{userName}</span>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Main layout */}
       <div className="flex flex-1 overflow-hidden gap-px bg-slate-800">
         {/* Challenge brief */}
-        <div className="w-[300px] shrink-0 overflow-hidden bg-slate-950">
+        <div className="w-75 shrink-0 overflow-hidden bg-slate-950">
           <ProblemPanel problem={problem} hints={hints} />
         </div>
 

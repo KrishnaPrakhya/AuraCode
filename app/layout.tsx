@@ -7,9 +7,15 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.app',
+  title: 'AuraCode — AI-Powered React Coding Competitions',
+  description: 'Compete in live React challenges, get Gemini AI scoring across 5 rubric categories, pair-program with an AI coach, and climb the global leaderboard — all in your browser.',
+  generator: 'AuraCode',
+  keywords: ['React', 'coding competition', 'AI evaluation', 'Gemini', 'hackathon', 'developer challenge'],
+  openGraph: {
+    title: 'AuraCode — AI-Powered React Coding Competitions',
+    description: 'Compete, build, and get AI-scored in real-time React challenges.',
+    type: 'website',
+  },
   icons: {
     icon: [
       {
