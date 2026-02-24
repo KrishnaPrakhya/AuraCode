@@ -6,7 +6,7 @@ import {
   TrendingUp,
   Clock,
   Lightbulb,
-  Sparkles,
+  Zap,
   RefreshCw,
   CircleDot,
   Trophy,
@@ -96,7 +96,7 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
     <div className="flex h-full flex-col overflow-auto p-6 space-y-5">
       {/* Stats row */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-900/30 to-emerald-800/20 backdrop-blur p-4 shadow">
+        <div className="rounded-xl border border-emerald-500/30 bg-linear-to-br from-emerald-900/30 to-emerald-800/20 backdrop-blur p-4 shadow">
           <div className="flex items-center gap-2 mb-1">
             <Users className="h-4 w-4 text-emerald-400" />
             <p className="text-xs text-emerald-300 font-medium">Total</p>
@@ -106,7 +106,7 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
           </p>
         </div>
 
-        <div className="rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-900/30 to-blue-800/20 backdrop-blur p-4 shadow">
+        <div className="rounded-xl border border-blue-500/30 bg-linear-to-br from-blue-900/30 to-blue-800/20 backdrop-blur p-4 shadow">
           <div className="flex items-center gap-2 mb-1">
             <CircleDot className="h-4 w-4 text-blue-400" />
             <p className="text-xs text-blue-300 font-medium">Active</p>
@@ -114,7 +114,7 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
           <p className="text-2xl font-bold text-blue-400">{activeCount}</p>
         </div>
 
-        <div className="rounded-xl border border-violet-500/30 bg-gradient-to-br from-violet-900/30 to-violet-800/20 backdrop-blur p-4 shadow">
+        <div className="rounded-xl border border-violet-500/30 bg-linear-to-br from-violet-900/30 to-violet-800/20 backdrop-blur p-4 shadow">
           <div className="flex items-center gap-2 mb-1">
             <Trophy className="h-4 w-4 text-violet-400" />
             <p className="text-xs text-violet-300 font-medium">Avg Score</p>
@@ -122,7 +122,7 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
           <p className="text-2xl font-bold text-violet-400">{avgScore}</p>
         </div>
 
-        <div className="rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-900/30 to-amber-800/20 backdrop-blur p-4 shadow">
+        <div className="rounded-xl border border-amber-500/30 bg-linear-to-br from-amber-900/30 to-amber-800/20 backdrop-blur p-4 shadow">
           <div className="flex items-center gap-2 mb-1">
             <Lightbulb className="h-4 w-4 text-amber-400" />
             <p className="text-xs text-amber-300 font-medium">Hints Used</p>
@@ -177,8 +177,8 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
                 </th>
                 <th className="px-4 py-3 text-center font-medium">
                   <span className="flex items-center justify-center gap-1">
-                    <Sparkles className="h-3 w-3 text-violet-400" />
-                    AI Eval
+                    <Zap className="h-3 w-3 text-violet-400" />
+                    AI Coach
                   </span>
                 </th>
                 <th className="px-4 py-3 text-center font-medium">Score</th>
@@ -211,14 +211,14 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
                     {/* Participant */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-blue-600 text-xs font-bold text-white shrink-0">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-linear-to-br from-violet-600 to-blue-600 text-xs font-bold text-white shrink-0">
                           {r.user_name?.[0]?.toUpperCase() ?? "?"}
                         </div>
                         <div>
                           <p className="font-medium text-slate-200 leading-tight">
                             {r.user_name}
                           </p>
-                          <p className="text-xs text-slate-500 truncate max-w-[120px]">
+                          <p className="text-xs text-slate-500 truncate max-w-30">
                             {r.user_email}
                           </p>
                         </div>
@@ -234,7 +234,7 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
                             "bg-slate-500"
                           }`}
                         />
-                        <span className="text-slate-300 truncate max-w-[140px]">
+                        <span className="text-slate-300 truncate max-w-35">
                           {r.problem_title}
                         </span>
                       </div>
@@ -252,11 +252,11 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
                       )}
                     </td>
 
-                    {/* AI Eval */}
+                    {/* AI Coach */}
                     <td className="px-4 py-3 text-center">
                       {r.ai_evaluate_used ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-300">
-                          <Sparkles className="h-3 w-3" />
+                          <Zap className="h-3 w-3" />
                           used
                         </span>
                       ) : (
@@ -272,6 +272,11 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
                       {r.hint_penalty > 0 && (
                         <span className="ml-1 text-xs text-red-400">
                           -{r.hint_penalty}
+                        </span>
+                      )}
+                      {r.ai_evaluate_used && (
+                        <span className="ml-1 text-[10px] text-violet-400" title="AI Coach used: -20 pts applied">
+                          AI-20
                         </span>
                       )}
                     </td>

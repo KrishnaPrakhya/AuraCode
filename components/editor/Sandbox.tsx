@@ -9,6 +9,11 @@ import { useCodeEditor } from "@/lib/hooks/useCodeEditor";
 import { problemRepository } from "@/lib/supabase/repositories/problems";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { Zap, Save, CheckCheck, CloudUpload, Timer, Trophy } from "lucide-react";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 import type { Problem, ProgrammingLanguage } from "@/lib/types/database";
 
 // localStorage keys for persisting per-user, per-problem state
@@ -124,6 +129,8 @@ export function Sandbox({
   const [evaluationResult, setEvaluationResult] =
     useState<EvaluationResult | null>(null);
   const [showPairProgrammer, setShowPairProgrammer] = useState(false);
+  // Track AI Coach usage — fires once per session to flag + deduct marks
+  const [aiCoachUsed, setAiCoachUsed] = useState(false);
   // Track whether we successfully registered this session in the DB
   const [dbSessionCreated, setDbSessionCreated] = useState(false);
   // Code persistence
@@ -215,6 +222,14 @@ export function Sandbox({
     },
     [sessionId, dbSessionCreated],
   );
+
+  /** Called once when the user first opens AuraCoach — marks usage in DB and deducts 20 pts at evaluation time */
+  const handleAICoachOpen = useCallback(async () => {
+    if (aiCoachUsed) return; // already flagged
+    setAiCoachUsed(true);
+    // Immediately persist the flag so admin sees it in real-time
+    await updateDbSession({ ai_pair_programmer_used: true });
+  }, [aiCoachUsed, updateDbSession]);
 
   // Subscribe to admin Realtime broadcasts — updates challenge live
   useEffect(() => {
@@ -438,11 +453,17 @@ export function Sandbox({
         const newEvalCount = aiEvalCount + 1;
         setAiEvalCount(newEvalCount);
 
+        // Apply AI Coach penalty: -20 pts if user opened AuraCoach
+        const AI_COACH_PENALTY = 20;
+        const finalScore = aiCoachUsed
+          ? Math.max(0, result.overall_score - AI_COACH_PENALTY)
+          : result.overall_score;
+
         // Persist score to DB session via server route
         await updateDbSession({
-          points_earned: result.overall_score,
+          points_earned: finalScore,
           total_hints_used: hintsUsedCount,
-          ai_pair_programmer_used: true,
+          ai_pair_programmer_used: aiCoachUsed,
         });
       } catch (err) {
         console.error("[sandbox] Evaluation error:", err);
@@ -460,46 +481,54 @@ export function Sandbox({
       hints.length,
       hintsUsedCount,
       aiEvalCount,
+      aiCoachUsed,
       recordCodeRun,
       markExecutionComplete,
       updateDbSession,
     ],
   );
 
-  // AI Hints / Coaching
+  // AI Hints / Coaching — now accepts user_question and returns the hint text
   const handleHintRequest = useCallback(
-    async (level: number) => {
-      if (!problem) return;
+    async (level: number, question: string): Promise<string> => {
+      if (!problem) return "";
       try {
         await recordHintRequest(level);
-
         const response = await fetch("/api/hints/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            problem_id: problem.id,
-            session_id: sessionId,
-            user_id: userId,
+            user_question: question,
             current_code: code,
-            hint_level: level,
-            previous_attempts: hints.length,
+            hint_number: hintsUsedCount,
             challenge_title: problem.title,
             challenge_description: problem.description,
             requirements:
               (problem as any).requirements ||
               problem.test_cases.map((tc) => tc.description).filter(Boolean),
+            // legacy fields kept for DB logging
+            problem_id: problem.id,
+            session_id: sessionId,
+            user_id: userId,
           }),
         });
 
         if (!response.ok) throw new Error("Hint generation failed");
-        const { hint } = await response.json();
-        setHints((prev) => [...prev, hint]);
-        const newHintCount = hintsUsedCount + 1;
-        setHintsUsedCount(newHintCount);
-        await updateDbSession({ total_hints_used: newHintCount });
+        const data = await response.json();
+        if (data.limit_reached && !data.hint) return "";
+        const hint = data.hint ?? "";
+        if (hint) {
+          setHints((prev) => [...prev, hint]);
+          const newHintCount = hintsUsedCount + 1;
+          setHintsUsedCount(newHintCount);
+          await updateDbSession({ total_hints_used: newHintCount });
+        }
+        return hint;
       } catch (err) {
         console.error("[sandbox] Hint error:", err);
+        return "";
       }
+      return "";
     },
     [
       code,
@@ -507,6 +536,7 @@ export function Sandbox({
       sessionId,
       userId,
       hints.length,
+      hintsUsedCount,
       recordHintRequest,
       updateDbSession,
     ],
@@ -609,10 +639,17 @@ export function Sandbox({
 
           <button
             onClick={() => setShowPairProgrammer(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-emerald-700/40 bg-emerald-900/20 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-900/40 transition"
+            title={aiCoachUsed ? "AI Coach used — -20 pts applied at evaluation" : "Open AI Coach (costs -20 pts at evaluation)"}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+              aiCoachUsed
+                ? "border-amber-700/50 bg-amber-900/20 text-amber-400 hover:bg-amber-900/30"
+                : "border-emerald-700/40 bg-emerald-900/20 text-emerald-300 hover:bg-emerald-900/40"
+            }`}
           >
             <Zap className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">AI Coach</span>
+            <span className="hidden sm:inline">
+              AI Coach{aiCoachUsed ? " (used)" : ""}
+            </span>
           </button>
 
           {/* User chip */}
@@ -626,14 +663,16 @@ export function Sandbox({
       </div>
 
       {/* Main layout */}
-      <div className="flex flex-1 overflow-hidden gap-px bg-slate-800">
+      <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
         {/* Challenge brief */}
-        <div className="w-75 shrink-0 overflow-hidden bg-slate-950">
+        <ResizablePanel defaultSize={22} minSize={14} maxSize={40} className="overflow-hidden bg-slate-950">
           <ProblemPanel problem={problem} hints={hints} />
-        </div>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle className="w-1.5 bg-slate-800 hover:bg-violet-600/50 transition-colors" />
 
         {/* Editor + preview */}
-        <div className="flex-1 overflow-hidden bg-slate-950">
+        <ResizablePanel defaultSize={78} minSize={40} className="overflow-hidden bg-slate-950">
           <CodeEditor
             defaultValue={initialEditorCode}
             resetKey={problem?.id || "demo"}
@@ -641,12 +680,14 @@ export function Sandbox({
             language={problem.language as ProgrammingLanguage}
             onEvaluate={handleEvaluate}
             onHintRequest={handleHintRequest}
+            hintsUsedCount={hintsUsedCount}
             isEvaluating={isEvaluating}
             sessionId={sessionId}
             userId={userId}
+            problem={problem}
           />
-        </div>
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       {/* AI Evaluation panel (modal) */}
       {evaluationResult && (
@@ -663,6 +704,11 @@ export function Sandbox({
           problemTitle={problem.title}
           problemDescription={problem.description}
           language={problem.language}
+          requirements={
+            (problem as any).requirements ||
+            problem.test_cases.map((tc) => tc.description).filter(Boolean)
+          }
+          onFirstUse={handleAICoachOpen}
           onClose={() => setShowPairProgrammer(false)}
         />
       )}
