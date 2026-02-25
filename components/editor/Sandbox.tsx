@@ -8,7 +8,14 @@ import { AIEvaluationPanel, type EvaluationResult } from "./AIEvaluationPanel";
 import { useCodeEditor } from "@/lib/hooks/useCodeEditor";
 import { problemRepository } from "@/lib/supabase/repositories/problems";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { Zap, Save, CheckCheck, CloudUpload, Timer, Trophy } from "lucide-react";
+import {
+  Zap,
+  Save,
+  CheckCheck,
+  CloudUpload,
+  Timer,
+  Trophy,
+} from "lucide-react";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -624,13 +631,22 @@ export function Sandbox({
       : (elapsedSeconds / timeLimitSecs) * 100
   );
   const timerColor =
-    remaining > 600 ? "text-emerald-400" : remaining > 180 ? "text-amber-400" : "text-red-400";
+    remaining > 600
+      ? "text-emerald-400"
+      : remaining > 180
+        ? "text-amber-400"
+        : "text-red-400";
   const timerBarColor =
-    remaining > 600 ? "bg-emerald-500" : remaining > 180 ? "bg-amber-500" : "bg-red-500";
+    remaining > 600
+      ? "bg-emerald-500"
+      : remaining > 180
+        ? "bg-amber-500"
+        : "bg-red-500";
 
-  const userAvatar = typeof window !== "undefined"
-    ? localStorage.getItem("aura_avatar") ?? "🧑‍💻"
-    : "🧑‍💻";
+  const userAvatar =
+    typeof window !== "undefined"
+      ? (localStorage.getItem("aura_avatar") ?? "🧑‍💻")
+      : "🧑‍💻";
 
   const hasGeminiKey = typeof window !== "undefined" && !!localStorage.getItem("aura_gemini_key");
 
@@ -671,7 +687,9 @@ export function Sandbox({
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-violet-500 to-indigo-600 text-xs font-bold text-white shadow shadow-violet-500/30">
             ⚛
           </div>
-          <span className="text-sm font-semibold text-white hidden md:block">AuraCode</span>
+          <span className="text-sm font-semibold text-white hidden md:block">
+            AuraCode
+          </span>
           <span className="text-slate-600 hidden md:block">/</span>
           <span className="text-sm text-slate-400 truncate max-w-50">{problem.title}</span>
           {/* Team mode: current member badge */}
@@ -686,8 +704,11 @@ export function Sandbox({
         {/* Center: timer */}
         <div className="flex items-center gap-2 shrink-0">
           <Timer className={`h-3.5 w-3.5 ${timerColor}`} />
-          <span className={`text-sm font-mono font-bold tabular-nums ${timerColor}`}>
-            {String(remainingMins).padStart(2, "0")}:{String(remainingSecs).padStart(2, "0")}
+          <span
+            className={`text-sm font-mono font-bold tabular-nums ${timerColor}`}
+          >
+            {String(remainingMins).padStart(2, "0")}:
+            {String(remainingSecs).padStart(2, "0")}
           </span>
           {/* Progress bar */}
           <div className="hidden md:block w-20 h-1.5 rounded-full bg-white/8 overflow-hidden">
@@ -704,7 +725,9 @@ export function Sandbox({
           {evaluationResult && (
             <div className="hidden md:flex items-center gap-1.5 rounded-lg border border-violet-700/40 bg-violet-900/20 px-3 py-1.5">
               <Trophy className="h-3.5 w-3.5 text-violet-400" />
-              <span className="text-xs font-bold text-violet-300">{evaluationResult.overall_score}/100</span>
+              <span className="text-xs font-bold text-violet-300">
+                {evaluationResult.overall_score}/100
+              </span>
             </div>
           )}
 
@@ -731,7 +754,11 @@ export function Sandbox({
 
           <button
             onClick={() => setShowPairProgrammer(true)}
-            title={aiCoachUsed ? "AI Coach used — -20 pts applied at evaluation" : "Open AI Coach (costs -20 pts at evaluation)"}
+            title={
+              aiCoachUsed
+                ? "AI Coach used — -20 pts applied at evaluation"
+                : "Open AI Coach (costs -20 pts at evaluation)"
+            }
             className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
               aiCoachUsed
                 ? "border-amber-700/50 bg-amber-900/20 text-amber-400 hover:bg-amber-900/30"
@@ -748,7 +775,9 @@ export function Sandbox({
           {userName && (
             <div className="flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/8 px-2 py-1.5">
               <span className="text-sm">{userAvatar}</span>
-              <span className="text-xs font-medium text-slate-300 hidden md:block">{userName}</span>
+              <span className="text-xs font-medium text-slate-300 hidden md:block">
+                {userName}
+              </span>
             </div>
           )}
 
@@ -807,16 +836,31 @@ export function Sandbox({
       )}
 
       {/* Main layout */}
-      <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+      <ResizablePanelGroup
+        direction="horizontal"
+        className="flex-1 overflow-hidden"
+      >
         {/* Challenge brief */}
-        <ResizablePanel defaultSize={22} minSize={14} maxSize={40} className="overflow-hidden bg-slate-950">
+        <ResizablePanel
+          defaultSize={22}
+          minSize={14}
+          maxSize={40}
+          className="overflow-hidden bg-slate-950"
+        >
           <ProblemPanel problem={problem} hints={hints} />
         </ResizablePanel>
 
-        <ResizableHandle withHandle className="w-1.5 bg-slate-800 hover:bg-violet-600/50 transition-colors" />
+        <ResizableHandle
+          withHandle
+          className="w-1.5 bg-slate-800 hover:bg-violet-600/50 transition-colors"
+        />
 
         {/* Editor + preview */}
-        <ResizablePanel defaultSize={78} minSize={40} className="overflow-hidden bg-slate-950">
+        <ResizablePanel
+          defaultSize={78}
+          minSize={40}
+          className="overflow-hidden bg-slate-950"
+        >
           <CodeEditor
             defaultValue={initialEditorCode}
             resetKey={problem?.id || "demo"}
