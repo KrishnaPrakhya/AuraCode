@@ -8,7 +8,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
  */
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, userId, problemId, userName, userEmail } = await request.json();
+    const { sessionId, userId, problemId, userName, userEmail, teamMembers } = await request.json();
 
     if (!sessionId || !userId || !problemId) {
       return NextResponse.json({ error: 'sessionId, userId and problemId required' }, { status: 400 });
@@ -49,20 +49,36 @@ export async function POST(request: NextRequest) {
     }
 
     // Upsert session — ignoreDuplicates so page refreshes don't reset score/hints
-    const { error: sessionError } = await admin.from('sessions').upsert(
-      {
-        id: sessionId,
-        problem_id: problemId,
-        user_id: userId,
-        status: 'in_progress',
-        started_at: new Date().toISOString(),
-        points_earned: 0,
-        hint_penalty: 0,
-        total_hints_used: 0,
-        ai_pair_programmer_used: false,
-      },
+    const sessionPayload: Record<string, unknown> = {
+      id: sessionId,
+      problem_id: problemId,
+      user_id: userId,
+      status: 'in_progress',
+      started_at: new Date().toISOString(),
+      points_earned: 0,
+      hint_penalty: 0,
+      total_hints_used: 0,
+      ai_pair_programmer_used: false,
+      ...(Array.isArray(teamMembers) && teamMembers.length > 1
+        ? { team_members: teamMembers }
+        : {}),
+    };
+
+    let { error: sessionError } = await admin.from('sessions').upsert(
+      sessionPayload,
       { onConflict: 'id', ignoreDuplicates: true }
     );
+
+    // If team_members column doesn't exist yet (migration not run), retry without it
+    if (sessionError?.code === 'PGRST204' && 'team_members' in sessionPayload) {
+      console.warn('[api/sandbox/session] team_members column missing — run scripts/09-team-session-members.sql. Retrying without it.');
+      const { team_members: _dropped, ...payloadWithoutTeam } = sessionPayload as any;
+      const { error: retryError } = await admin.from('sessions').upsert(
+        payloadWithoutTeam,
+        { onConflict: 'id', ignoreDuplicates: true }
+      );
+      sessionError = retryError ?? null;
+    }
 
     if (sessionError) throw sessionError;
 

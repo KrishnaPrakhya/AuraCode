@@ -8,8 +8,15 @@ import json
 from typing import List, Optional
 from google import genai
 from models import ReactEvaluationRequest, ReactEvaluationResponse, CategoryScore
+from services.gemini_utils import gemini_retry_async, cache_get, cache_put
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+
+def _make_client(api_key: Optional[str] = None) -> genai.Client:
+    """Return a Gemini client using the user key if supplied, otherwise fall back to env."""
+    key = (api_key or "").strip() or os.getenv("GEMINI_API_KEY") or ""
+    return genai.Client(api_key=key)
 
 EVALUATION_PROMPT = """You are an expert React developer and hackathon judge. Evaluate the following React component submission for a hackathon challenge.
 
@@ -106,7 +113,16 @@ class ReactEvaluator:
 
     def __init__(self):
         self.client = client
-        self.model = "gemini-2.5-flash-lite"
+        self.model = "gemini-2.0-flash-lite"
+
+    @gemini_retry_async
+    async def _generate(self, prompt: str, api_key: Optional[str] = None):
+        """Isolated async Gemini call — decorated with exponential-backoff retry."""
+        c = _make_client(api_key)
+        return c.models.generate_content(
+            model=self.model,
+            contents=prompt,
+        )
 
     async def evaluate(self, request: ReactEvaluationRequest) -> ReactEvaluationResponse:
         requirements_text = "\n".join(
@@ -122,11 +138,14 @@ class ReactEvaluator:
         )
 
         try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-            )
-            text = response.text.strip()
+            # Check cache first — evaluation of same code+challenge is expensive
+            cached = cache_get(prompt, self.model)
+            if cached:
+                text = cached
+            else:
+                response = await self._generate(prompt, getattr(request, 'gemini_api_key', None))
+                text = response.text.strip()
+                cache_put(prompt, text, self.model)
 
             # Extract JSON
             if "```json" in text:

@@ -51,6 +51,7 @@ export function usePairProgrammer() {
       abortControllerRef.current = new AbortController();
 
       try {
+        const geminiKey = typeof window !== 'undefined' ? localStorage.getItem('aura_gemini_key') ?? '' : '';
         const response = await fetch(`${BACKEND_URL}/api/pair-programmer/session/stream`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -60,6 +61,7 @@ export function usePairProgrammer() {
             problem_description: problemDescription,
             language,
             context_window: [],
+            ...(geminiKey ? { gemini_api_key: geminiKey } : {}),
           }),
           signal: abortControllerRef.current.signal,
         });

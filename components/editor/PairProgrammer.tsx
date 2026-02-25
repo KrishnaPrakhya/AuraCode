@@ -57,9 +57,13 @@ const MODES: { id: Mode; label: string; icon: React.ReactNode; desc: string }[] 
 ];
 
 async function callCoach(body: object): Promise<any> {
+  const geminiKey = typeof window !== 'undefined' ? localStorage.getItem('aura_gemini_key') ?? '' : '';
   const res = await fetch("/api/coach", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(geminiKey ? { 'x-gemini-key': geminiKey } : {}),
+    },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Coach API ${res.status}`);

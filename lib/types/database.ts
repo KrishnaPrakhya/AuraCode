@@ -52,6 +52,8 @@ export interface Problem {
   updated_at: string;
   is_active: boolean;
   hint_strategy: HintStrategy;
+  team_mode?: boolean;
+  team_size?: number; // 2–5 members per team
 }
 
 // ============================================================================

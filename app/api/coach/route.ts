@@ -1,22 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { callGemini, checkCooldown } from '@/lib/gemini-client';
 
-const GEMINI_URL =
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=` +
-  process.env.GEMINI_API_KEY;
-
-async function callGemini(prompt: string, maxTokens = 400): Promise<string> {
-  const res = await fetch(GEMINI_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.5 },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini ${res.status}`);
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
-}
+// Cooldowns per mode per session — scan/plan are expensive; chat is cheap
+const COOLDOWN_MS: Record<string, number> = {
+  scan: 12_000,  // 12 s between scans (code analysis, 500 tokens)
+  plan: 15_000,  // 15 s between plan refreshes
+  chat:  4_000,  // 4 s between chat messages
+};
 
 /**
  * AI Coach Endpoint — three modes: scan | plan | chat
@@ -30,6 +20,7 @@ async function callGemini(prompt: string, maxTokens = 400): Promise<string> {
  */
 export async function POST(request: NextRequest) {
   try {
+    const userApiKey = request.headers.get('x-gemini-key') ?? undefined;
     const body = await request.json();
     const {
       mode,
@@ -42,6 +33,16 @@ export async function POST(request: NextRequest) {
     } = body;
 
     if (!mode) return NextResponse.json({ error: 'mode is required' }, { status: 400 });
+
+    // Per-session cooldown guard
+    const sessionKey = `coach:${mode}:${body.session_id ?? 'anon'}`;
+    const minGap = COOLDOWN_MS[mode] ?? 5_000;
+    if (!checkCooldown(sessionKey, minGap)) {
+      return NextResponse.json(
+        { error: `Too many ${mode} requests — please wait`, retry_after_ms: minGap },
+        { status: 429 }
+      );
+    }
 
     const reqList = requirements.length
       ? requirements.map((r: string, i: number) => `${i + 1}. ${r}`).join('\n')
@@ -73,7 +74,7 @@ Return ONLY valid JSON (no markdown, no explanation outside JSON) in this exact 
 
 Be precise. Only list a requirement as met if you can see code implementing it. Keep bugs brief (one line each). next_priority must be actionable.`;
 
-      let raw = await callGemini(prompt, 500);
+      let raw = await callGemini(prompt, 500, 0.5, true, userApiKey);
       // strip any markdown code fences Gemini might add
       raw = raw.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
       try {
@@ -115,7 +116,7 @@ Return ONLY valid JSON (no markdown wrapper):
 
 Steps should be specific to THIS challenge, not generic. Mark done=true only if you can clearly see that step implemented in the code.`;
 
-      let raw = await callGemini(prompt, 500);
+      let raw = await callGemini(prompt, 500, 0.5, true, userApiKey);
       raw = raw.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
       try {
         const result = JSON.parse(raw);
@@ -164,7 +165,7 @@ ${historyBlock ? `Recent conversation:\n${historyBlock}\n\n` : ''}Student just a
 
 Reply as AuraCoach — concise, helpful, never more than 4 sentences unless a code snippet is truly necessary.`;
 
-      const reply = await callGemini(prompt, 250);
+      const reply = await callGemini(prompt, 250, 0.5, false, userApiKey); // chat replies: don't cache (unique per context)
       return NextResponse.json({ mode: 'chat', reply });
     }
 

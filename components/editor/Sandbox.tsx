@@ -27,6 +27,8 @@ interface SandboxProps {
   sessionId: string;
   userId: string;
   userName?: string;
+  /** When present, enables team mode — each member gets equal turn time */
+  teamMembers?: string[];
 }
 
 const STARTER_CODE = `import { useState } from 'react';
@@ -118,6 +120,7 @@ export function Sandbox({
   sessionId,
   userId,
   userName,
+  teamMembers,
 }: SandboxProps) {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -133,6 +136,9 @@ export function Sandbox({
   const [aiCoachUsed, setAiCoachUsed] = useState(false);
   // Track whether we successfully registered this session in the DB
   const [dbSessionCreated, setDbSessionCreated] = useState(false);
+  // Gemini API key settings panel
+  const [showKeySettings, setShowKeySettings] = useState(false);
+  const [keyInputValue, setKeyInputValue] = useState("");
   // Code persistence
   const [initialEditorCode, setInitialEditorCode] = useState("");
   const [lastSavedCode, setLastSavedCode] = useState("");
@@ -141,11 +147,21 @@ export function Sandbox({
 
   // Countdown timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  // Team mode turn tracking
+  const isTeamMode = Array.isArray(teamMembers) && teamMembers.length > 1;
+  const [currentMemberIdx, setCurrentMemberIdx] = useState(0);
+  const [memberTurnSeconds, setMemberTurnSeconds] = useState(0);
+  const [showHandoff, setShowHandoff] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
-    timerRef.current = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
+    timerRef.current = setInterval(() => {
+      if (showHandoff) return; // pause ticking during handoff screen
+      setElapsedSeconds((s) => s + 1);
+      if (isTeamMode) setMemberTurnSeconds((s) => s + 1);
+    }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showHandoff, isTeamMode]);
 
   const {
     code,
@@ -179,6 +195,7 @@ export function Sandbox({
             problemId: loadedProblem.id,
             userName: userName || `Participant ${userId.slice(0, 6)}`,
             userEmail: `sandbox-${userId.replace(/-/g, "").slice(0, 8)}@aura.local`,
+            ...(isTeamMode && teamMembers?.length ? { teamMembers } : {}),
           }),
         });
         if (!res.ok) {
@@ -203,7 +220,7 @@ export function Sandbox({
         // best-effort — local session still works
       }
     },
-    [sessionId, userId, userName],
+    [sessionId, userId, userName, isTeamMode, teamMembers],
   );
 
   // Update DB session metrics (hints, score)
@@ -433,7 +450,12 @@ export function Sandbox({
 
         const response = await fetch("/api/evaluate", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(typeof window !== 'undefined' && localStorage.getItem('aura_gemini_key')
+              ? { 'x-gemini-key': localStorage.getItem('aura_gemini_key')! }
+              : {}),
+          },
           body: JSON.stringify({
             code: codeToEvaluate,
             language: problem.language,
@@ -496,7 +518,12 @@ export function Sandbox({
         await recordHintRequest(level);
         const response = await fetch("/api/hints/generate", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(typeof window !== 'undefined' && localStorage.getItem('aura_gemini_key')
+              ? { 'x-gemini-key': localStorage.getItem('aura_gemini_key')! }
+              : {}),
+          },
           body: JSON.stringify({
             user_question: question,
             current_code: code,
@@ -542,6 +569,24 @@ export function Sandbox({
     ],
   );
 
+  // ── Team handoff detection (must be above early returns) ──
+  const teamCount = isTeamMode ? (teamMembers?.length ?? 1) : 1;
+  const totalTimeSecs = (problem?.time_limit_minutes ?? 45) * 60;
+  const perMemberSecs = isTeamMode ? Math.floor(totalTimeSecs / teamCount) : totalTimeSecs;
+
+  useEffect(() => {
+    if (!isTeamMode || !problem) return;
+    if (memberTurnSeconds >= perMemberSecs && currentMemberIdx < teamCount - 1) {
+      setShowHandoff(true);
+    }
+  }, [memberTurnSeconds, perMemberSecs, isTeamMode, problem, currentMemberIdx, teamCount]);
+
+  const handleNextTurn = useCallback(() => {
+    setCurrentMemberIdx((i) => i + 1);
+    setMemberTurnSeconds(0);
+    setShowHandoff(false);
+  }, []);
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-slate-950">
@@ -563,11 +608,21 @@ export function Sandbox({
     );
   }
 
-  const timeLimitSecs = (problem.time_limit_minutes || 45) * 60;
-  const remaining = Math.max(0, timeLimitSecs - elapsedSeconds);
+  // totalTimeSecs computed above (before early returns) — alias for clarity below
+  const timeLimitSecs = totalTimeSecs;
+
+  const remaining = Math.max(
+    0,
+    isTeamMode ? perMemberSecs - memberTurnSeconds : timeLimitSecs - elapsedSeconds
+  );
   const remainingMins = Math.floor(remaining / 60);
   const remainingSecs = remaining % 60;
-  const timerPct = Math.min(100, (elapsedSeconds / timeLimitSecs) * 100);
+  const timerPct = Math.min(
+    100,
+    isTeamMode
+      ? (memberTurnSeconds / perMemberSecs) * 100
+      : (elapsedSeconds / timeLimitSecs) * 100
+  );
   const timerColor =
     remaining > 600 ? "text-emerald-400" : remaining > 180 ? "text-amber-400" : "text-red-400";
   const timerBarColor =
@@ -577,8 +632,38 @@ export function Sandbox({
     ? localStorage.getItem("aura_avatar") ?? "🧑‍💻"
     : "🧑‍💻";
 
+  const hasGeminiKey = typeof window !== "undefined" && !!localStorage.getItem("aura_gemini_key");
+
   return (
-    <div className="flex h-full w-full flex-col bg-slate-950">
+    <div className="relative flex h-full w-full flex-col bg-slate-950">
+      {/* ── Team handoff overlay ── */}
+      {showHandoff && isTeamMode && teamMembers && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-6 rounded-3xl border border-violet-500/30 bg-[#0d1117] px-12 py-10 shadow-2xl shadow-violet-900/40 text-center max-w-sm w-full mx-4">
+            <div className="text-5xl">⌨️</div>
+            <div>
+              <p className="text-sm uppercase tracking-widest text-slate-500 mb-1">Time&apos;s up!</p>
+              <h2 className="text-2xl font-extrabold text-white">
+                {teamMembers[currentMemberIdx]}&apos;s turn is over
+              </h2>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border border-violet-500/20 bg-violet-500/10 px-5 py-3">
+              <span className="text-2xl">👋</span>
+              <div className="text-left">
+                <p className="text-xs text-slate-400">Next up</p>
+                <p className="font-bold text-violet-300 text-lg">{teamMembers[currentMemberIdx + 1]}</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">Pass the keyboard, then continue.</p>
+            <button
+              onClick={handleNextTurn}
+              className="w-full rounded-xl bg-linear-to-r from-violet-600 to-indigo-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 transition active:scale-[0.98]"
+            >
+              ✅ {teamMembers[currentMemberIdx + 1]} is ready — Start turn
+            </button>
+          </div>
+        </div>
+      )}
       {/* Top bar */}
       <div className="flex items-center justify-between border-b border-slate-700/50 bg-[#0d1117] px-4 py-2 gap-4">
         {/* Left: brand + problem title */}
@@ -589,6 +674,13 @@ export function Sandbox({
           <span className="text-sm font-semibold text-white hidden md:block">AuraCode</span>
           <span className="text-slate-600 hidden md:block">/</span>
           <span className="text-sm text-slate-400 truncate max-w-50">{problem.title}</span>
+          {/* Team mode: current member badge */}
+          {isTeamMode && teamMembers && (
+            <span className="hidden md:flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-xs font-semibold text-violet-300">
+              👤 {teamMembers[currentMemberIdx]}
+              <span className="text-slate-500">({currentMemberIdx + 1}/{teamMembers.length})</span>
+            </span>
+          )}
         </div>
 
         {/* Center: timer */}
@@ -659,8 +751,60 @@ export function Sandbox({
               <span className="text-xs font-medium text-slate-300 hidden md:block">{userName}</span>
             </div>
           )}
+
+          {/* Gemini key settings button */}
+          <button
+            onClick={() => {
+              setKeyInputValue(typeof window !== 'undefined' ? localStorage.getItem('aura_gemini_key') ?? '' : '');
+              setShowKeySettings((v) => !v);
+            }}
+            title={hasGeminiKey ? "Gemini API Key set (click to update)" : "Set your Gemini API Key to reduce rate limits"}
+            className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs transition ${
+              hasGeminiKey
+                ? "border-emerald-700/40 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40"
+                : "border-white/8 bg-white/5 text-slate-500 hover:text-slate-300 hover:bg-white/8"
+            }`}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a4 4 0 11-8 0 4 4 0 018 0zM3.293 17.707A8 8 0 0119 12H5a8 8 0 01-1.707 5.707z" />
+            </svg>
+          </button>
         </div>
       </div>
+
+      {/* Gemini Key settings dropdown */}
+      {showKeySettings && (
+        <div className="relative z-40 border-b border-slate-700/50 bg-[#0d1117] px-4 py-3 flex items-center gap-3">
+          <svg className="h-4 w-4 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a4 4 0 11-8 0 4 4 0 018 0zM3.293 17.707A8 8 0 0119 12H5a8 8 0 01-1.707 5.707z" />
+          </svg>
+          <input
+            type="password"
+            placeholder="Paste your Gemini API key (AIza…) — reduces rate limits"
+            value={keyInputValue}
+            onChange={(e) => setKeyInputValue(e.target.value)}
+            autoFocus
+            className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 font-mono text-xs text-white placeholder-slate-600 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+          />
+          <button
+            onClick={() => {
+              const k = keyInputValue.trim();
+              if (k) localStorage.setItem("aura_gemini_key", k);
+              else localStorage.removeItem("aura_gemini_key");
+              setShowKeySettings(false);
+            }}
+            className="shrink-0 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 transition"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => setShowKeySettings(false)}
+            className="shrink-0 text-slate-600 hover:text-slate-400 transition text-xs"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* Main layout */}
       <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">

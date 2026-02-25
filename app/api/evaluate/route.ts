@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function POST(request: NextRequest) {
   try {
+    const userApiKey = request.headers.get('x-gemini-key') ?? undefined;
     const body = await request.json();
     const { code, language, challenge_title, challenge_description, requirements } = body;
 
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
         challenge_title,
         challenge_description: challenge_description || '',
         requirements: requirements || [],
+        ...(userApiKey ? { gemini_api_key: userApiKey } : {}),
       }),
     });
 

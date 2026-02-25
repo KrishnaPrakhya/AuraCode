@@ -51,6 +51,7 @@ class ReactEvaluationRequest(BaseModel):
     challenge_title: str
     challenge_description: str
     requirements: List[str]  # List of acceptance criteria strings
+    gemini_api_key: Optional[str] = None  # User-supplied key (overrides server env key)
 
 class CategoryScore(BaseModel):
     """Score and feedback for one evaluation category"""
