@@ -82,6 +82,8 @@ export async function POST(request: NextRequest) {
       language,
       testCases,
       createdBy,
+      teamMode,
+      teamSize,
     } = body;
 
     if (!title || !description) {
@@ -107,6 +109,8 @@ export async function POST(request: NextRequest) {
         created_by: createdBy ?? '00000000-0000-0000-0000-000000000001',
         hint_strategy: 'progressive',
         is_active: true,
+        team_mode: teamMode ?? false,
+        team_size: teamSize ?? 2,
       })
       .select()
       .single();

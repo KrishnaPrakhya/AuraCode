@@ -10,11 +10,18 @@ from typing import AsyncGenerator
 from dotenv import load_dotenv
 from google import genai
 from pydantic import BaseModel
+from services.gemini_utils import gemini_retry_sync, _is_rate_error, MAX_RETRIES, INITIAL_DELAY
 
 load_dotenv()
 
-# Initialize Gemini client
+# Initialize default Gemini client (used when no per-user key is provided)
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+
+def _make_client(api_key: str | None = None) -> genai.Client:
+    """Return a Gemini client using the user key if supplied, otherwise fall back to env."""
+    key = (api_key or "").strip() or os.getenv("GEMINI_API_KEY") or ""
+    return genai.Client(api_key=key)
 
 class CodeSuggestion(BaseModel):
     """Model for AI pair programming suggestions"""
@@ -36,10 +43,10 @@ class PairProgrammer:
     
     def __init__(self):
         self.client = client
-        self.model = "gemini-2.5-flash-lite"
+        self.model = "gemini-2.0-flash-lite"
         self.session_timeout = 30  # 30 seconds per session
     
-    async def start_session(self, session: PairProgrammerSession) -> AsyncGenerator[str, None]:
+    async def start_session(self, session: PairProgrammerSession, api_key: str | None = None) -> AsyncGenerator[str, None]:
         """
         Start a 30-second pair programming session with streaming responses
         Yields JSON-formatted suggestions in real-time
@@ -65,53 +72,79 @@ Focus on React-specific guidance: component structure, hooks (useState, useEffec
 Respond as JSON with keys: suggestion (what to do next), explanation (why this matters), code_snippet (short example, optional), language"""
         
         full_response = ""
-        
-        try:
-            # Stream response from Gemini
-            response = self.client.models.generate_content_stream(
-                model=self.model,
-                contents=prompt
-            )
-            
-            for chunk in response:
-                if chunk.text:
-                    text = chunk.text
-                    full_response += text
-                    yield text
-            
-            # Parse final JSON response
+        last_exc = None
+        gemini_client = _make_client(api_key)
+
+        for attempt in range(MAX_RETRIES + 1):
+            if attempt > 0:
+                delay = INITIAL_DELAY * (2 ** (attempt - 1))
+                import logging
+                logging.getLogger(__name__).warning(
+                    "[pair_programmer] 429 retry %d/%d after %.1f s", attempt, MAX_RETRIES, delay
+                )
+                await asyncio.sleep(delay)
             try:
-                # Extract JSON from response (may contain markdown)
-                import re
-                json_match = re.search(r'\{.*\}', full_response, re.DOTALL)
-                if json_match:
-                    suggestion_data = json.loads(json_match.group())
+                # Stream response from Gemini
+                response = gemini_client.models.generate_content_stream(
+                    model=self.model,
+                    contents=prompt
+                )
+                
+                for chunk in response:
+                    if chunk.text:
+                        text = chunk.text
+                        full_response += text
+                        yield text
+                
+                # Parse final JSON response
+                try:
+                    # Extract JSON from response (may contain markdown)
+                    import re
+                    json_match = re.search(r'\{.*\}', full_response, re.DOTALL)
+                    if json_match:
+                        suggestion_data = json.loads(json_match.group())
+                        yield json.dumps({
+                            "type": "suggestion_complete",
+                            "data": suggestion_data
+                        })
+                except json.JSONDecodeError:
+                    # Fallback if response isn't valid JSON
                     yield json.dumps({
                         "type": "suggestion_complete",
-                        "data": suggestion_data
+                        "data": {
+                            "suggestion": full_response,
+                            "explanation": "Pair programming suggestion",
+                            "language": session.language
+                        }
                     })
-            except json.JSONDecodeError:
-                # Fallback if response isn't valid JSON
+                return  # success — exit the retry loop
+
+            except asyncio.TimeoutError:
                 yield json.dumps({
-                    "type": "suggestion_complete",
-                    "data": {
-                        "suggestion": full_response,
-                        "explanation": "Pair programming suggestion",
-                        "language": session.language
-                    }
+                    "type": "error",
+                    "message": "Session timeout - pair programming window closed"
                 })
-                
-        except asyncio.TimeoutError:
-            yield json.dumps({
-                "type": "error",
-                "message": "Session timeout - pair programming window closed"
-            })
-        except Exception as e:
-            yield json.dumps({
-                "type": "error",
-                "message": f"Pair programming error: {str(e)}"
-            })
+                return
+            except Exception as e:
+                if _is_rate_error(e) and attempt < MAX_RETRIES:
+                    last_exc = e
+                    continue
+                yield json.dumps({
+                    "type": "error",
+                    "message": f"Pair programming error: {str(e)}"
+                })
+                return
+
+        yield json.dumps({"type": "error", "message": f"Rate limit: {last_exc}"})
     
+    @gemini_retry_sync
+    def _analyze_sync(self, prompt: str, api_key: str | None = None):
+        """Isolated sync Gemini call with retry decorator."""
+        return _make_client(api_key).models.generate_content(
+            model=self.model,
+            contents=prompt
+        )
+
     async def analyze_next_step(self, session: PairProgrammerSession) -> CodeSuggestion:
         """Synchronous analysis of the next coding step"""
         
@@ -127,10 +160,7 @@ Current code in {session.language}:
 Respond with JSON: {{"suggestion": "...", "explanation": "...", "code_snippet": "..."}}"""
 
         try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt
-            )
+            response = self._analyze_sync(prompt, api_key)
             
             import re
             json_match = re.search(r'\{.*\}', response.text, re.DOTALL)

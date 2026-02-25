@@ -37,6 +37,8 @@ export function ProblemEditor({
   ]);
   const [timeLimitMinutes, setTimeLimitMinutes] = useState(45);
   const [pointsAvailable, setPointsAvailable] = useState(100);
+  const [teamMode, setTeamMode] = useState(false);
+  const [teamSize, setTeamSize] = useState(2);
   const [saving, setSaving] = useState(false);
   const [pushing, setPushing] = useState(false);
   // Supabase Realtime broadcast (replaces broken WebSocket)
@@ -87,6 +89,8 @@ export function ProblemEditor({
         setRequirements(
           reqs.length > 0 ? reqs : ["Component renders without errors"],
         );
+        setTeamMode(problem.team_mode ?? false);
+        setTeamSize(problem.team_size ?? 2);
       }
     }
   }, [selectedProblem, problems]);
@@ -125,6 +129,8 @@ export function ProblemEditor({
         testCases: testCasesFromReqs,
         requirements,
         createdBy,
+        teamMode,
+        teamSize,
       };
 
       if (selectedProblem) {
@@ -141,6 +147,8 @@ export function ProblemEditor({
             starter_code: starterCode,
             language,
             test_cases: testCasesFromReqs,
+            team_mode: teamMode,
+            team_size: teamSize,
           }),
         });
         const result = await res.json();
@@ -207,6 +215,8 @@ export function ProblemEditor({
     setTimeLimitMinutes(45);
     setPointsAvailable(100);
     setRequirements(["Component renders without errors"]);
+    setTeamMode(false);
+    setTeamSize(2);
   };
 
   const handleDelete = async () => {
@@ -453,6 +463,61 @@ export function ProblemEditor({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Team Mode */}
+          <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-semibold text-slate-200">
+                  👥 Team Mode
+                </label>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Participants code in turns — time divided equally among members
+                </p>
+              </div>
+              {/* Toggle */}
+              <button
+                type="button"
+                onClick={() => setTeamMode((v) => !v)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                  teamMode ? "bg-violet-600" : "bg-slate-600"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    teamMode ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {teamMode && (
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-2">
+                  Team Size (members per team)
+                </label>
+                <div className="flex gap-2">
+                  {[2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setTeamSize(n)}
+                      className={`flex-1 h-10 rounded-lg text-sm font-semibold transition-all ${
+                        teamSize === n
+                          ? "bg-linear-to-r from-violet-600 to-indigo-600 text-white shadow-lg scale-105"
+                          : "bg-slate-700/50 text-slate-300 hover:bg-slate-600/50"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  Each member gets {timeLimitMinutes > 0 ? Math.floor(timeLimitMinutes / teamSize) : "—"} min
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Time & Points */}

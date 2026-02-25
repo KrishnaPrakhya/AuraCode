@@ -36,10 +36,11 @@ async def stream_pair_programming(session_data: dict):
             context_window=session_data.get("context_window", [])
         )
         
+        api_key = session_data.get("gemini_api_key") or None
         pair_programmer = get_pair_programmer()
         
         async def generate():
-            async for chunk in pair_programmer.start_session(session):
+            async for chunk in pair_programmer.start_session(session, api_key=api_key):
                 yield chunk.encode() + b"\n"
         
         return StreamingResponse(

@@ -1,22 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { callGemini, checkCooldown } from '@/lib/gemini-client';
 
-const GEMINI_URL =
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=` +
-  process.env.GEMINI_API_KEY;
-
-async function callGemini(prompt: string, maxTokens = 120): Promise<string> {
-  const res = await fetch(GEMINI_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini ${res.status}`);
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
-}
+// Minimum gap between hint requests per session (4 s) to prevent burst spam
+const HINT_COOLDOWN_MS = 4_000;
 
 /**
  * Targeted Hint Generation — powered by Gemini directly.
@@ -32,6 +18,7 @@ async function callGemini(prompt: string, maxTokens = 120): Promise<string> {
  */
 export async function POST(request: NextRequest) {
   try {
+    const userApiKey = request.headers.get('x-gemini-key') ?? undefined;
     const body = await request.json();
     const {
       user_question,
@@ -44,6 +31,15 @@ export async function POST(request: NextRequest) {
 
     if (!user_question?.trim()) {
       return NextResponse.json({ error: 'user_question is required' }, { status: 400 });
+    }
+
+    // Per-session rate guard — silently slow-path if same session is spamming
+    const sessionKey = `hints:${body.session_id ?? 'anon'}`;
+    if (!checkCooldown(sessionKey, HINT_COOLDOWN_MS)) {
+      return NextResponse.json(
+        { error: 'Too many hint requests — please wait a moment', retry_after_ms: HINT_COOLDOWN_MS },
+        { status: 429 }
+      );
     }
 
     const MAX_HINTS = 10;
@@ -96,9 +92,11 @@ Reply with ONLY the concise hint (2-3 sentences). No preamble, no "Great questio
 
     let hint: string;
     try {
-      hint = await callGemini(prompt, 130);
-    } catch {
+      // maxRetries=0 → fail fast straight to keyword fallback instead of waiting 7 s
+      hint = await callGemini(prompt, 350, 0.4, true, userApiKey, 0);
+    } catch(error:any) {
       // Gemini unavailable — targeted fallback based on question keywords
+      console.log(error)
       const q = user_question.toLowerCase();
       if (q.includes('state') || q.includes('usestate'))
         hint = `Use \`useState\` to declare reactive data — each changing value needs its own state variable. Call the setter function to update it and trigger a re-render.`;
@@ -119,134 +117,5 @@ Reply with ONLY the concise hint (2-3 sentences). No preamble, no "Great questio
   } catch (error) {
     console.error('[hints] error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-}
-
-  try {
-    const body: HintRequest = await request.json();
-    const {
-      problem_id,
-      user_id,
-      session_id,
-      current_code,
-      hint_level,
-      previous_attempts,
-    } = body;
-
-    if (!problem_id || !user_id || !session_id || hint_level === undefined) {
-      return NextResponse.json(
-        {
-          error: 'Missing required fields: problem_id, user_id, session_id, hint_level',
-        },
-        { status: 400 }
-      );
-    }
-
-    // Get problem details from Supabase (best-effort — demo/random IDs won't exist)
-    const supabase = getSupabaseClient();
-    const { data: dbProblem } = await supabase
-      .from('problems')
-      .select()
-      .eq('id', problem_id)
-      .maybeSingle();
-
-    // Fall back to body fields if DB lookup fails (demo mode / RLS)
-    const problem = dbProblem ?? {
-      id: problem_id,
-      title: body.challenge_title ?? 'React Challenge',
-      description: body.challenge_description ?? '',
-      test_cases: [],
-      requirements: body.requirements ?? [],
-    };
-
-    // Call FastAPI LangGraph backend for hint generation
-    const backendUrl = process.env.FASTAPI_BACKEND_URL || 'http://localhost:8000';
-
-    let hintResult: HintResponse;
-    try {
-      const response = await fetch(`${backendUrl}/api/mentor/hint`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          problem: {
-            id: problem.id,
-            title: problem.title,
-            description: problem.description,
-            requirements: Array.isArray((problem as any).requirements)
-              ? (problem as any).requirements
-              : ((problem as any).test_cases as any[] || []).map((tc: any) => tc.description || tc.input),
-          },
-          code: current_code,
-          hint_level,
-          previous_attempts,
-        }),
-      });
-
-      if (!response.ok) throw new Error(`FastAPI ${response.status}`);
-      hintResult = await response.json();
-    } catch {
-      // FastAPI unavailable — return a static coaching hint
-      const staticHints = [
-        `Break your solution into smaller functions. Start with the simplest piece and build up.`,
-        `Think about what state you need. What data changes over time? Use \`useState\` for each piece.`,
-        `Check your component renders correctly first, then add interactivity step by step.`,
-        `Look at the requirements one by one. Which ones are already working? Focus on the next unmet one.`,
-      ];
-      hintResult = {
-        hint: staticHints[Math.min(hint_level, staticHints.length - 1)],
-        explanation: 'AI mentor is offline — here is a general coaching tip.',
-        point_penalty: 0,
-      };
-    }
-
-    // Calculate point penalty based on hint level
-    const penaltyMap = { 0: 0, 1: 5, 2: 10, 3: 20 };
-    const pointPenalty = penaltyMap[hint_level as keyof typeof penaltyMap] || 0;
-
-    // Save hint to database
-    const { error: insertError } = await supabase.from('hints').insert({
-      session_id,
-      problem_id,
-      user_id,
-      hint_level,
-      content: hintResult.hint,
-      code_snippet: hintResult.code_snippet,
-      point_penalty: pointPenalty,
-      is_ai_generated: true,
-      model_name: 'langgraph-mentor',
-    });
-
-    if (insertError) {
-      console.error('[v0] Error saving hint to database:', insertError);
-    }
-
-    // Update session hint penalty
-    const { data: session } = await supabase
-      .from('sessions')
-      .select('hint_penalty, total_hints_used')
-      .eq('id', session_id)
-      .single();
-
-    if (session) {
-      await supabase
-        .from('sessions')
-        .update({
-          hint_penalty: (session.hint_penalty || 0) + pointPenalty,
-          total_hints_used: (session.total_hints_used || 0) + 1,
-        })
-        .eq('id', session_id);
-    }
-
-    return NextResponse.json({
-      hint: hintResult.hint,
-      code_snippet: hintResult.code_snippet,
-      point_penalty: pointPenalty,
-      explanation: hintResult.explanation,
-    });
-  } catch (error) {
-    console.error('[v0] Hint generation error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error', details: String(error) },
-      { status: 500 }
-    );
   }
 }

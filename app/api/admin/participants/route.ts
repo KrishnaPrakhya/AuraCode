@@ -12,6 +12,7 @@ export interface ParticipantRecord {
   problem_id: string | null;
   problem_title: string | null;
   problem_difficulty: number | null;
+  problem_team_mode: boolean;
   status: string;
   started_at: string | null;
   submitted_at: string | null;
@@ -20,6 +21,7 @@ export interface ParticipantRecord {
   hint_penalty: number;
   ai_evaluate_used: boolean;
   elapsed_minutes: number;
+  team_members: string[] | null;
 }
 
 /**
@@ -55,7 +57,7 @@ export async function GET() {
         ? supabase.from('users').select('id, username, email, display_name').in('id', userIds)
         : Promise.resolve({ data: [], error: null }),
       problemIds.length > 0
-        ? supabase.from('problems').select('id, title, difficulty').in('id', problemIds)
+        ? supabase.from('problems').select('id, title, difficulty, team_mode').in('id', problemIds)
         : Promise.resolve({ data: [], error: null }),
     ]);
 
@@ -84,6 +86,7 @@ export async function GET() {
         problem_id: s.problem_id ?? null,
         problem_title: problem?.title ?? null,
         problem_difficulty: problem?.difficulty ?? null,
+        problem_team_mode: (problem as any)?.team_mode ?? false,
         status: s.status ?? 'in_progress',
         started_at: s.started_at ?? null,
         submitted_at: s.submitted_at ?? null,
@@ -92,6 +95,7 @@ export async function GET() {
         hint_penalty: s.hint_penalty ?? 0,
         ai_evaluate_used: s.ai_pair_programmer_used ?? false,
         elapsed_minutes: elapsedMinutes,
+        team_members: Array.isArray(s.team_members) ? s.team_members : null,
       };
     });
 

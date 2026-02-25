@@ -3,11 +3,11 @@ AI React Mentor Service using Google Gemini
 Provides intelligent coaching for React component building challenges
 """
 
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from google import genai
 from models import HintGenerationResponse
 import os
-import json
+from services.gemini_utils import gemini_retry_sync, cache_get, cache_put
 
 # Initialize Gemini client
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -16,53 +16,36 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 # REACT-FOCUSED PROMPTS
 # ============================================================================
 
-ANALYSIS_PROMPT = """Analyze this React component code for the challenge:
-
-Challenge: {problem}
-
-Code:
-```tsx
-{code}
-```
-
-Requirements to meet:
-{requirements}
-
-Provide a JSON analysis with:
-- correctness: "complete" | "partially_complete" | "incomplete"
-- issues: list of React-specific issues (wrong hook usage, missing deps, etc.)
-- suggestions: list of React improvement suggestions
-- quality_score: 0-100
-- react_patterns: brief assessment of React patterns used
-
-Return ONLY valid JSON."""
-
 HINT_GENERATION_PROMPTS = {
     0: """You are a React mentor. Give a gentle nudge (one encouraging sentence) for this React challenge.
 
 Challenge: {problem}
-Code Analysis: {analysis}
+Student code (summarised):
+{code}
 
 Focus on React-specific guidance. Be brief and encouraging. Do NOT give away the solution.""",
 
     1: """You are a React mentor. Give a helpful guidance-level hint (2-3 sentences).
 
 Challenge: {problem}
-Code Analysis: {analysis}
+Student code:
+{code}
 
-Guide the developer toward the right React approach — component structure, which hooks to use, or state management strategy. Don't show code yet.""",
+Guide the developer toward the right React approach — component structure, which hooks to use, or state management strategy. Don’t show code yet.""",
 
     2: """You are a React mentor. Give a pattern-level hint showing a React pattern or hook example.
 
 Challenge: {problem}
-Code Analysis: {analysis}
+Student code:
+{code}
 
 Explain the relevant React pattern (e.g. controlled inputs, lifting state, useEffect cleanup, custom hooks). Include a short code snippet showing the pattern skeleton, NOT the full solution.""",
 
     3: """You are a React mentor. Give structure-level guidance with a component scaffold.
 
 Challenge: {problem}
-Code Analysis: {analysis}
+Student code:
+{code}
 
 Provide the component structure outline with:
 - Suggested component breakdown
@@ -80,60 +63,35 @@ class MentorAgent:
     
     def __init__(self):
         self.client = client
-        self.model = "gemini-2.5-flash-lite"
+        self.model = "gemini-2.0-flash-lite"
 
-    def _analyze_code(self, problem_title: str, problem_description: str,
-                      requirements: List[str], user_code: str) -> Dict[str, Any]:
-        """Analyze user's React code for issues and completeness"""
-        problem_text = f"Title: {problem_title}\n{problem_description}"
-        requirements_text = "\n".join(f"- {r}" for r in requirements) if requirements else "No specific requirements"
-
-        prompt = ANALYSIS_PROMPT.format(
-            code=user_code,
-            problem=problem_text,
-            requirements=requirements_text,
+    @gemini_retry_sync
+    def _call_gemini(self, prompt: str) -> str:
+        """Single Gemini call, decorated with exponential-backoff retry on 429."""
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt,
         )
+        return response.text.strip()
 
-        try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt
-            )
-            text = response.text.strip()
-            if "```json" in text:
-                text = text.split("```json")[1].split("```")[0].strip()
-            elif "```" in text:
-                text = text.split("```")[1].split("```")[0].strip()
-            analysis = json.loads(text)
-        except Exception as e:
-            print(f"Analysis error: {e}")
-            analysis = {
-                "correctness": "partially_complete",
-                "issues": ["Could not analyze code"],
-                "suggestions": [],
-                "quality_score": 30,
-                "react_patterns": "Could not assess"
-            }
-        return analysis
-
-    def _generate_hint(self, problem_title: str, problem_description: str,
-                       user_code: str, analysis: Dict, hint_level: int) -> tuple[str, Optional[str]]:
-        """Generate contextual React coaching based on analysis"""
-        analysis_str = json.dumps(analysis, indent=2)
+    def _generate_hint(
+        self,
+        problem_title: str,
+        problem_description: str,
+        user_code: str,
+        hint_level: int,
+    ) -> tuple[str, Optional[str]]:
+        """Generate a React hint using a single Gemini call (no separate analysis pass)."""
         problem_text = f"{problem_title}: {problem_description}"
+        code_preview = user_code[:1500]  # cap to keep tokens down
 
         prompt = HINT_GENERATION_PROMPTS[hint_level].format(
             problem=problem_text,
-            code=user_code,
-            analysis=analysis_str
+            code=code_preview,
         )
 
         try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt
-            )
-            hint_content = response.text.strip()
+            hint_content = self._call_gemini(prompt)
             code_snippet = None
 
             if hint_level >= 2 and "```" in hint_content:
@@ -166,16 +124,36 @@ class MentorAgent:
         hint_level: int,
         previous_attempts: int = 0
     ) -> HintGenerationResponse:
-        """Generate AI React coaching hint"""
+        """Generate AI React coaching hint (single Gemini call with cache)."""
         try:
             adjusted_level = min(hint_level, 3)
             if previous_attempts > 5 and adjusted_level < 3:
                 adjusted_level += 1
 
-            analysis = self._analyze_code(problem_title, problem_description, requirements, user_code)
-            hint_content, code_snippet = self._generate_hint(
-                problem_title, problem_description, user_code, analysis, adjusted_level
+            # Build the prompt to check cache before calling Gemini
+            problem_text = f"{problem_title}: {problem_description}"
+            cache_prompt = HINT_GENERATION_PROMPTS[adjusted_level].format(
+                problem=problem_text,
+                code=user_code[:1500],
             )
+
+            # Check in-memory cache — same code + same level = same hint
+            cached_text = cache_get(cache_prompt, self.model)
+            if cached_text:
+                print("[mentor] cache hit — skipping Gemini call")
+                hint_content = cached_text
+                code_snippet = None
+                if adjusted_level >= 2 and "```" in hint_content:
+                    parts = hint_content.split("```")
+                    if len(parts) >= 3:
+                        code_snippet = parts[1].strip()
+            else:
+                hint_content, code_snippet = self._generate_hint(
+                    problem_title, problem_description, user_code, adjusted_level
+                )
+                if hint_content:
+                    cache_put(cache_prompt, hint_content, self.model)
+
             penalty = self._calculate_penalty(adjusted_level, previous_attempts)
 
             return HintGenerationResponse(
