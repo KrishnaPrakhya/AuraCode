@@ -63,7 +63,8 @@ class MentorAgent:
     
     def __init__(self):
         self.client = client
-        self.model = "gemini-2.0-flash-lite"
+        self.model = "gemini-flash-lite-latest"
+        assert self.model == "gemini-flash-lite-latest", "MentorAgent must use gemini-flash-lite-latest"
 
     @gemini_retry_sync
     def _call_gemini(self, prompt: str) -> str:

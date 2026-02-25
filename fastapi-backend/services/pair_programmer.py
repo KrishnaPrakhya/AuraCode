@@ -43,7 +43,9 @@ class PairProgrammer:
     
     def __init__(self):
         self.client = client
-        self.model = "gemini-2.0-flash-lite"
+        self.model = "gemini-flash-lite-latest"
+        # sanity check in case someone accidentally changes the hardcoded value
+        assert self.model == "gemini-flash-lite-latest", "PairProgrammer must use gemini-flash-lite-latest"
         self.session_timeout = 30  # 30 seconds per session
     
     async def start_session(self, session: PairProgrammerSession, api_key: str | None = None) -> AsyncGenerator[str, None]:
