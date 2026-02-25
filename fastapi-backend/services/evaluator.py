@@ -113,7 +113,8 @@ class ReactEvaluator:
 
     def __init__(self):
         self.client = client
-        self.model = "gemini-2.0-flash-lite"
+        self.model = "gemini-flash-lite-latest"
+        assert self.model == "gemini-flash-lite-latest", "ReactEvaluator must use gemini-flash-lite-latest"
 
     @gemini_retry_async
     async def _generate(self, prompt: str, api_key: Optional[str] = None):

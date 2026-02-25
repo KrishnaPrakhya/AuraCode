@@ -8,7 +8,11 @@
  *  - Per-key cooldown guard to prevent the same feature from hammering the API
  */
 
-const MODEL = 'gemini-2.0-flash-lite';
+const MODEL = 'gemini-flash-lite-latest';
+// model safeguard: this library is only allowed to call the flash‑lite variant.
+if (MODEL !== 'gemini-flash-lite-latest') {
+  throw new Error(`gemini-client: MODEL constant changed to ${MODEL}; only gemini-flash-lite-latest is permitted`);
+}
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 const MAX_RETRIES = 3;
@@ -115,6 +119,8 @@ export async function callGemini(
     }
   }
 
+  // log model for visibility in server/browser logs (can be useful when auditing)
+  console.log(`[gemini] using model ${MODEL}`);
   const url = `${BASE_URL}/${MODEL}:generateContent?key=${resolvedKey}`;
   const bodyStr = JSON.stringify({
     contents: [{ parts: [{ text: prompt }] }],
@@ -138,8 +144,13 @@ export async function callGemini(
     });
 
     if (res.status === 429) {
-      // Honour Retry-After if provided (cap at 15 s to avoid hanging too long)
+      // log headers/body to help diagnose why the key is being throttled
       const retryAfter = res.headers.get('Retry-After');
+      console.warn(`[gemini] received 429 from API (attempt ${attempt}/${maxRetries})`, {
+        url,
+        retryAfter,
+      });
+      // Honour Retry-After if provided (cap at 15 s to avoid hanging too long)
       if (retryAfter && attempt === 0 && maxRetries > 0) {
         const waitMs = Math.min(parseInt(retryAfter, 10) * 1000, 15_000);
         console.log(`[gemini] Retry-After: ${retryAfter} s — waiting ${waitMs} ms`);

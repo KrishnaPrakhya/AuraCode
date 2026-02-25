@@ -93,10 +93,14 @@ Reply with ONLY the concise hint (2-3 sentences). No preamble, no "Great questio
     let hint: string;
     try {
       // maxRetries=0 → fail fast straight to keyword fallback instead of waiting 7 s
-      hint = await callGemini(prompt, 350, 0.4, true, userApiKey, 0);
+      // allow a couple of retries even for hints; the upstream `callGemini`
+      // helper already implements exponential backoff so this will usually
+      // hide transient rate-limit spikes from Google's side.
+      hint = await callGemini(prompt, 350, 0.4, true, userApiKey, 2);
     } catch(error:any) {
       // Gemini unavailable — targeted fallback based on question keywords
-      console.log(error)
+      // Log full error object so we can inspect status, headers, etc.
+      console.warn('[hints] gemini call failed', error);
       const q = user_question.toLowerCase();
       if (q.includes('state') || q.includes('usestate'))
         hint = `Use \`useState\` to declare reactive data — each changing value needs its own state variable. Call the setter function to update it and trigger a re-render.`;
