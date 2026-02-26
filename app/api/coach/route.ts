@@ -134,6 +134,49 @@ Steps should be specific to THIS challenge, not generic. Mark done=true only if 
       }
     }
 
+    // ── HINT MODE ─────────────────────────────────────────────────────────
+    // Returns a laser-focused hint for ONE specific missing requirement.
+    // Never reveals the full solution — gives the concept + a small pattern.
+    if (mode === 'hint') {
+      const { requirement = '' } = body;
+      if (!requirement) {
+        return NextResponse.json({ error: 'requirement is required for hint mode' }, { status: 400 });
+      }
+
+      const prompt = `You are AuraCoach — a sharp React mentor in a live hackathon. A student is stuck on ONE specific requirement and needs a targeted hint.
+
+Challenge: ${problem_title}
+Requirement they need help with: "${requirement}"
+
+Student's current code:
+${codeBlock}
+
+Give a tight, useful hint:
+1. Explain the key concept or pattern needed in 1-2 clear sentences.
+2. Provide a tiny (3-8 line) code snippet they can ADAPT — do NOT include the exact working solution for their problem, just show the pattern.
+
+Return ONLY valid JSON (no markdown wrapper):
+{
+  "hint": "1-2 sentence explanation of what they need to do and why",
+  "snippet": "small code pattern they can adapt, or empty string if not needed"
+}
+
+Keep it concise. The student should understand the concept, not copy-paste the answer.`;
+
+      let raw = await callGemini(prompt, 300, 0.4, false, userApiKey);
+      raw = raw.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
+      try {
+        const result = JSON.parse(raw);
+        return NextResponse.json({ mode: 'hint', hint: result.hint ?? '', snippet: result.snippet ?? '' });
+      } catch {
+        return NextResponse.json({
+          mode: 'hint',
+          hint: `To implement "${requirement}", look at the challenge description for the specific formula or pattern. Break it into: what data you need, how to compute it, and where to display it.`,
+          snippet: '',
+        });
+      }
+    }
+
     // ── CHAT MODE ─────────────────────────────────────────────────────────
     if (mode === 'chat') {
       if (!message.trim()) {
@@ -145,14 +188,14 @@ Steps should be specific to THIS challenge, not generic. Mark done=true only if 
         .map((h: { role: string; text: string }) => `${h.role === 'user' ? 'Student' : 'Coach'}: ${h.text}`)
         .join('\n');
 
-      const prompt = `You are AuraCoach — a sharp, friendly React pair programmer helping a student in a live hackathon.
+      const prompt = `You are AuraCoach — a sharp, direct React pair programmer coaching a student in a live hackathon. They've paid 10 points to talk to you, so make every word count.
 
-Your personality:
-- Encouraging but direct, no fluff
-- Give short, specific answers (3–5 sentences max)  
-- When showing code, keep snippets tiny and focused
-- Never write the student's full solution for them
-- Use emojis sparingly (max 1 per response) to keep energy up
+Rules:
+- Answer in 3-5 sentences MAX unless a code snippet is truly necessary
+- Never write their full solution — give the concept, pattern, or nudge
+- Be specific to THEIR code and THEIR problem, not generic advice
+- If they're confused about a concept, explain it with a tiny 3-6 line example
+- Use exactly 0 filler phrases like "Great question!" or "Of course!"
 
 Challenge: ${problem_title}
 Requirements:
@@ -161,9 +204,9 @@ ${reqList}
 Student's current code:
 ${codeBlock}
 
-${historyBlock ? `Recent conversation:\n${historyBlock}\n\n` : ''}Student just asked: "${message}"
+${historyBlock ? `Recent conversation:\n${historyBlock}\n\n` : ''}Student: "${message}"
 
-Reply as AuraCoach — concise, helpful, never more than 4 sentences unless a code snippet is truly necessary.`;
+Reply as AuraCoach — direct, specific, max 5 sentences unless a code snippet is needed.`;
 
       const reply = await callGemini(prompt, 250, 0.5, false, userApiKey); // chat replies: don't cache (unique per context)
       return NextResponse.json({ mode: 'chat', reply });

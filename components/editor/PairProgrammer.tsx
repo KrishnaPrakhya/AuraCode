@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   ChevronRight,
   RefreshCw,
+
 } from "lucide-react";
 
 interface ScanResult {
@@ -56,7 +57,7 @@ const MODES: { id: Mode; label: string; icon: React.ReactNode; desc: string }[] 
     id: "plan",
     label: "Plan",
     icon: <ListChecks className="h-4 w-4" />,
-    desc: "Step-by-step implementation plan",
+    desc: "Step-by-step plan with progress",
   },
 ];
 
@@ -108,6 +109,10 @@ export function PairProgrammer({
   const [planLoading, setPlanLoading] = useState(false);
   const planRan = useRef(false);
 
+  // — Per-requirement hint state —
+  const [hintMap, setHintMap] = useState<Record<string, { hint: string; snippet: string }>>({});
+  const [hintLoading, setHintLoading] = useState<Record<string, boolean>>({});
+
   const basePayload = {
     code: userCode,
     problem_title: problemTitle,
@@ -144,6 +149,18 @@ export function PairProgrammer({
       setPlanSteps([]);
     } finally {
       setPlanLoading(false);
+    }
+  }, [userCode, problemTitle, problemDescription, requirements]);
+
+  const runHint = useCallback(async (req: string) => {
+    setHintLoading((prev) => ({ ...prev, [req]: true }));
+    try {
+      const data = await callCoach({ ...basePayload, mode: "hint", requirement: req });
+      setHintMap((prev) => ({ ...prev, [req]: { hint: data.hint ?? "", snippet: data.snippet ?? "" } }));
+    } catch {
+      setHintMap((prev) => ({ ...prev, [req]: { hint: "Couldn't load hint. Check your connection and try again.", snippet: "" } }));
+    } finally {
+      setHintLoading((prev) => ({ ...prev, [req]: false }));
     }
   }, [userCode, problemTitle, problemDescription, requirements]);
 
@@ -296,12 +313,37 @@ export function PairProgrammer({
                     <div>
                       <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-red-400">
                         <XCircle className="h-3.5 w-3.5" /> Missing ({scanResult.missing.length})
+                        <span className="ml-auto text-[10px] normal-case font-normal text-slate-500">tap 💡 for a hint</span>
                       </h4>
                       <ul className="space-y-1.5">
                         {scanResult.missing.map((r, i) => (
-                          <li key={i} className="flex items-start gap-2 rounded-lg bg-red-900/10 border border-red-800/30 px-3 py-2">
-                            <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" />
-                            <span className="text-xs text-red-200/80">{r}</span>
+                          <li key={i} className="rounded-lg bg-red-900/10 border border-red-800/30 px-3 py-2 space-y-2">
+                            <div className="flex items-start gap-2">
+                              <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" />
+                              <span className="text-xs text-red-200/80 flex-1">{r}</span>
+                              <button
+                                onClick={() =>
+                                  hintMap[r]
+                                    ? setHintMap((prev) => { const n = { ...prev }; delete n[r]; return n; })
+                                    : runHint(r)
+                                }
+                                disabled={hintLoading[r]}
+                                className="shrink-0 flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold bg-amber-900/20 border border-amber-700/30 text-amber-400 hover:bg-amber-900/40 disabled:opacity-50 transition"
+                              >
+                                {hintLoading[r]
+                                  ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                  : <span>💡</span>}
+                                {hintMap[r] ? "hide" : "hint"}
+                              </button>
+                            </div>
+                            {hintMap[r] && (
+                              <div className="ml-5 rounded-lg bg-amber-900/10 border border-amber-700/20 p-2.5 space-y-1.5">
+                                <p className="text-[11px] text-amber-200/90 leading-relaxed">{hintMap[r].hint}</p>
+                                {hintMap[r].snippet && (
+                                  <pre className="text-[10px] bg-slate-900/80 rounded-md p-2 overflow-x-auto text-slate-300 leading-relaxed whitespace-pre-wrap">{hintMap[r].snippet}</pre>
+                                )}
+                              </div>
+                            )}
                           </li>
                         ))}
                       </ul>
