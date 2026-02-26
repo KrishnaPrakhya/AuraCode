@@ -35,8 +35,12 @@ interface PairProgrammerProps {
   language: string;
   requirements?: string[];
   onClose: () => void;
-  /** Called once on first AI Coach usage — used to flag + deduct marks */
+  /** Called once on each open of AI Coach to increment usage count in DB */
   onFirstUse?: () => void;
+  /** How many times AI Coach has been opened (0-indexed, before this open) */
+  coachUsesCount?: number;
+  /** Maximum allowed opens (default 2) */
+  coachUsesMax?: number;
 }
 
 type Mode = "scan" | "plan";
@@ -78,9 +82,20 @@ export function PairProgrammer({
   requirements = [],
   onClose,
   onFirstUse,
+  coachUsesCount = 0,
+  coachUsesMax = 2,
 }: PairProgrammerProps) {
   const [mode, setMode] = useState<Mode>("scan");
   const firstUseFired = useRef(false);
+
+  // Fire onFirstUse once per mount (i.e., once per open), not per scan
+  useEffect(() => {
+    if (!firstUseFired.current) {
+      firstUseFired.current = true;
+      onFirstUse?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // — Scan state —
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -101,11 +116,6 @@ export function PairProgrammer({
   };
 
   const runScan = useCallback(async () => {
-    // Fire onFirstUse exactly once — tracks usage + triggers mark deduction
-    if (!firstUseFired.current) {
-      firstUseFired.current = true;
-      onFirstUse?.();
-    }
     setScanLoading(true);
     setScanError(null);
     setScanResult(null);
@@ -170,6 +180,16 @@ export function PairProgrammer({
             <h2 className="text-sm font-bold text-white">AuraCoach</h2>
             <p className="truncate text-[11px] text-slate-400">{problemTitle}</p>
           </div>
+          {/* Usage badge */}
+          <div className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+            coachUsesCount + 1 >= coachUsesMax
+              ? "bg-red-900/40 text-red-300 border border-red-700/50"
+              : "bg-violet-900/40 text-violet-300 border border-violet-700/50"
+          }`} title={`-${(coachUsesCount + 1) * 10} pts total deducted at evaluation`}>
+            <Zap className="h-3 w-3" />
+            {coachUsesCount + 1}/{coachUsesMax}
+            {coachUsesCount + 1 >= coachUsesMax && <span className="ml-0.5">⛔</span>}
+          </div>
           <button
             onClick={onClose}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-white/8 hover:text-slate-300 transition"
@@ -194,6 +214,20 @@ export function PairProgrammer({
               {m.label}
             </button>
           ))}
+        </div>
+
+        {/* Penalty / usage notice */}
+        <div className={`shrink-0 flex items-center gap-2 px-4 py-1.5 text-[11px] ${
+          coachUsesCount + 1 >= coachUsesMax
+            ? "bg-red-900/20 border-b border-red-800/30 text-red-300"
+            : "bg-violet-900/15 border-b border-violet-800/20 text-violet-400"
+        }`}>
+          <Zap className="h-3 w-3 shrink-0" />
+          <span>
+            This is use <strong>{coachUsesCount + 1}</strong> of <strong>{coachUsesMax}</strong> &mdash;&nbsp;
+            <strong>-{(coachUsesCount + 1) * 10} pts</strong> total deducted at evaluation
+            {coachUsesCount + 1 >= coachUsesMax && " · Last use!"}
+          </span>
         </div>
 
         {/* ── SCAN ─────────────────────────────────────────────────────── */}

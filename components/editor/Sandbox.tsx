@@ -29,6 +29,11 @@ const codeKey = (userId: string, problemId: string) =>
 const hintsKey = (userId: string, problemId: string) =>
   `aura_hints_${userId}_${problemId}`;
 
+// Penalty constants — must stay in sync with components/admin/ParticipantMonitor.tsx
+const HINT_PENALTY_PER_USE = 3;      // -3 pts per hint used
+const AI_COACH_PENALTY_PER_USE = 10; // -10 pts per AI Coach open (more than hint)
+const AI_COACH_MAX_USES = 2;         // hard limit: user can open AI Coach at most 2×
+
 interface SandboxProps {
   problemId: string;
   sessionId: string;
@@ -139,8 +144,8 @@ export function Sandbox({
   const [evaluationResult, setEvaluationResult] =
     useState<EvaluationResult | null>(null);
   const [showPairProgrammer, setShowPairProgrammer] = useState(false);
-  // Track AI Coach usage — fires once per session to flag + deduct marks
-  const [aiCoachUsed, setAiCoachUsed] = useState(false);
+  // Track AI Coach usage count — max 2 opens per session; each open deducts marks
+  const [aiCoachUses, setAiCoachUses] = useState(0);
   // Track whether we successfully registered this session in the DB
   const [dbSessionCreated, setDbSessionCreated] = useState(false);
   // Gemini API key settings panel
@@ -247,13 +252,17 @@ export function Sandbox({
     [sessionId, dbSessionCreated],
   );
 
-  /** Called once when the user first opens AuraCoach — marks usage in DB and deducts 20 pts at evaluation time */
+  /** Called every time the user opens AuraCoach — max 2 opens; increments count + persists to DB */
   const handleAICoachOpen = useCallback(async () => {
-    if (aiCoachUsed) return; // already flagged
-    setAiCoachUsed(true);
-    // Immediately persist the flag so admin sees it in real-time
-    await updateDbSession({ ai_pair_programmer_used: true });
-  }, [aiCoachUsed, updateDbSession]);
+    if (aiCoachUses >= AI_COACH_MAX_USES) return; // limit already reached
+    const newCount = aiCoachUses + 1;
+    setAiCoachUses(newCount);
+    // Immediately persist so admin sees updated count in real-time
+    await updateDbSession({
+      ai_pair_programmer_used: true,
+      ai_coach_uses: newCount,
+    });
+  }, [aiCoachUses, updateDbSession]);
 
   // Subscribe to admin Realtime broadcasts — updates challenge live
   useEffect(() => {
@@ -482,17 +491,21 @@ export function Sandbox({
         const newEvalCount = aiEvalCount + 1;
         setAiEvalCount(newEvalCount);
 
-        // Apply AI Coach penalty: -20 pts if user opened AuraCoach
-        const AI_COACH_PENALTY = 20;
-        const finalScore = aiCoachUsed
-          ? Math.max(0, result.overall_score - AI_COACH_PENALTY)
-          : result.overall_score;
+        // Compute penalties:
+        //   Hint penalty  : total_hints_used × HINT_PENALTY_PER_USE  (-3 pts each)
+        //   Coach penalty : aiCoachUses       × AI_COACH_PENALTY_PER_USE (-10 pts each)
+        // AI Coach penalty > Hint penalty by design (admins can see breakdown).
+        const hintPenalty = hintsUsedCount * HINT_PENALTY_PER_USE;
+        const aiCoachPenalty = aiCoachUses * AI_COACH_PENALTY_PER_USE;
+        const finalScore = Math.max(0, result.overall_score - hintPenalty - aiCoachPenalty);
 
-        // Persist score to DB session via server route
+        // Persist score + penalty breakdown to DB session
         await updateDbSession({
           points_earned: finalScore,
           total_hints_used: hintsUsedCount,
-          ai_pair_programmer_used: aiCoachUsed,
+          hint_penalty: hintPenalty,
+          ai_pair_programmer_used: aiCoachUses > 0,
+          ai_coach_uses: aiCoachUses,
         });
       } catch (err) {
         console.error("[sandbox] Evaluation error:", err);
@@ -510,7 +523,7 @@ export function Sandbox({
       hints.length,
       hintsUsedCount,
       aiEvalCount,
-      aiCoachUsed,
+      aiCoachUses,
       recordCodeRun,
       markExecutionComplete,
       updateDbSession,
@@ -753,21 +766,32 @@ export function Sandbox({
           ) : null}
 
           <button
-            onClick={() => setShowPairProgrammer(true)}
+            onClick={() => {
+              if (aiCoachUses < AI_COACH_MAX_USES) setShowPairProgrammer(true);
+            }}
+            disabled={aiCoachUses >= AI_COACH_MAX_USES}
             title={
-              aiCoachUsed
-                ? "AI Coach used — -20 pts applied at evaluation"
-                : "Open AI Coach (costs -20 pts at evaluation)"
+              aiCoachUses >= AI_COACH_MAX_USES
+                ? `AI Coach limit reached (${AI_COACH_MAX_USES}/${AI_COACH_MAX_USES} — ${aiCoachUses * AI_COACH_PENALTY_PER_USE} pts deducted)`
+                : aiCoachUses > 0
+                ? `AI Coach: ${aiCoachUses}/${AI_COACH_MAX_USES} uses — -${AI_COACH_PENALTY_PER_USE} pts per open`
+                : `Open AI Coach (-${AI_COACH_PENALTY_PER_USE} pts per open, max ${AI_COACH_MAX_USES}×)`
             }
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-              aiCoachUsed
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${
+              aiCoachUses >= AI_COACH_MAX_USES
+                ? "border-red-700/50 bg-red-900/20 text-red-400"
+                : aiCoachUses > 0
                 ? "border-amber-700/50 bg-amber-900/20 text-amber-400 hover:bg-amber-900/30"
                 : "border-emerald-700/40 bg-emerald-900/20 text-emerald-300 hover:bg-emerald-900/40"
             }`}
           >
             <Zap className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">
-              AI Coach{aiCoachUsed ? " (used)" : ""}
+              {aiCoachUses >= AI_COACH_MAX_USES
+                ? `AI Coach (${aiCoachUses}/${AI_COACH_MAX_USES} ⛔)`
+                : aiCoachUses > 0
+                ? `AI Coach (${aiCoachUses}/${AI_COACH_MAX_USES})`
+                : "AI Coach"}
             </span>
           </button>
 
@@ -886,7 +910,7 @@ export function Sandbox({
       )}
 
       {/* Pair programmer modal */}
-      {showPairProgrammer && (
+      {showPairProgrammer && aiCoachUses < AI_COACH_MAX_USES && (
         <PairProgrammer
           userCode={code}
           problemTitle={problem.title}
@@ -896,6 +920,8 @@ export function Sandbox({
             (problem as any).requirements ||
             problem.test_cases.map((tc) => tc.description).filter(Boolean)
           }
+          coachUsesCount={aiCoachUses}
+          coachUsesMax={AI_COACH_MAX_USES}
           onFirstUse={handleAICoachOpen}
           onClose={() => setShowPairProgrammer(false)}
         />

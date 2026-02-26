@@ -125,6 +125,7 @@ export type Database = {
           hint_penalty: number
           total_hints_used: number
           ai_pair_programmer_used: boolean
+          ai_coach_uses: number
         }
         Insert: {
           id?: string
@@ -138,6 +139,7 @@ export type Database = {
           hint_penalty?: number
           total_hints_used?: number
           ai_pair_programmer_used?: boolean
+          ai_coach_uses?: number
         }
         Update: {
           id?: string
@@ -151,6 +153,7 @@ export type Database = {
           hint_penalty?: number
           total_hints_used?: number
           ai_pair_programmer_used?: boolean
+          ai_coach_uses?: number
         }
         Relationships: [
           {

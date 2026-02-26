@@ -74,6 +74,7 @@ export interface Session {
   hint_penalty: number;
   total_hints_used: number;
   ai_pair_programmer_used: boolean;
+  ai_coach_uses: number;
 }
 
 // ============================================================================
