@@ -162,19 +162,19 @@ export function AdminDashboard({
         <TabsList className="grid w-full grid-cols-3 border-b border-slate-700/50 bg-slate-900/30 backdrop-blur px-6">
           <TabsTrigger
             value="problems"
-            className="text-sm font-medium data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-400 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
+            className="text-sm font-medium data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-400 data-[state=active]:border-b-2 data-[state=active]:border-blue-500 text-white hover:cursor-pointer"
           >
             📝 Problems
           </TabsTrigger>
           <TabsTrigger
             value="participants"
-            className="text-sm font-medium data-[state=active]:bg-emerald-500/10 data-[state=active]:text-emerald-400 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500"
+            className="text-sm font-medium data-[state=active]:bg-emerald-500/10 data-[state=active]:text-emerald-400 data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 text-white hover:cursor-pointer"
           >
             👥 Participants
           </TabsTrigger>
           <TabsTrigger
             value="analytics"
-            className="text-sm font-medium data-[state=active]:bg-purple-500/10 data-[state=active]:text-purple-400 data-[state=active]:border-b-2 data-[state=active]:border-purple-500"
+            className="text-sm font-medium data-[state=active]:bg-purple-500/10 data-[state=active]:text-purple-400 data-[state=active]:border-b-2 data-[state=active]:border-purple-500 text-white hover:cursor-pointer"
           >
             📊 Analytics
           </TabsTrigger>

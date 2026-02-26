@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Problem } from "@/lib/types/database";
 import {
   CheckSquare,
@@ -131,61 +132,96 @@ export function ProblemPanel({ problem, hints }: ChallengePanelProps) {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {activeTab === "brief" && (
           <>
-            <div>
-              <p className="text-sm text-slate-300 leading-relaxed">
-                {problem.description}
-              </p>
+            <div className="prose-sm prose-invert max-w-none">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                className="space-y-3 text-sm text-slate-300"
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                components={{
+                  code: ({ children }: any) => (
+                    <code className="rounded bg-slate-800 px-1.5 py-0.5 text-xs font-mono text-violet-300">
+                      {children}
+                    </code>
+                  ),
+                  pre: ({ children }: any) => (
+                    <pre className="overflow-x-auto rounded-lg bg-slate-900 border border-slate-700 p-3 text-xs">
+                      {children}
+                    </pre>
+                  ),
+                  h1: ({ children }: any) => (
+                    <h1 className="text-base font-bold text-white mt-4 mb-2">
+                      {children}
+                    </h1>
+                  ),
+                  h2: ({ children }: any) => (
+                    <h2 className="text-sm font-bold text-slate-200 mt-3 mb-2 border-b border-slate-700/60 pb-1">
+                      {children}
+                    </h2>
+                  ),
+                  h3: ({ children }: any) => (
+                    <h3 className="text-xs font-semibold text-slate-300 mt-2 mb-1">
+                      {children}
+                    </h3>
+                  ),
+                  p: ({ children }: any) => (
+                    <p className="text-sm text-slate-300 leading-relaxed mb-2">
+                      {children}
+                    </p>
+                  ),
+                  ul: ({ children }: any) => (
+                    <ul className="list-disc list-inside space-y-1 text-slate-300 mb-2">
+                      {children}
+                    </ul>
+                  ),
+                  ol: ({ children }: any) => (
+                    <ol className="list-decimal list-inside space-y-1 text-slate-300 mb-2">
+                      {children}
+                    </ol>
+                  ),
+                  li: ({ children }: any) => (
+                    <li className="text-sm text-slate-300">{children}</li>
+                  ),
+                  strong: ({ children }: any) => (
+                    <strong className="text-white font-semibold">
+                      {children}
+                    </strong>
+                  ),
+                  em: ({ children }: any) => (
+                    <em className="text-slate-300 italic">{children}</em>
+                  ),
+                  table: ({ children }: any) => (
+                    <div className="overflow-x-auto my-2">
+                      <table className="w-full text-xs border-collapse rounded-lg overflow-hidden">
+                        {children}
+                      </table>
+                    </div>
+                  ),
+                  thead: ({ children }: any) => (
+                    <thead className="bg-slate-800 text-slate-200">{children}</thead>
+                  ),
+                  tbody: ({ children }: any) => (
+                    <tbody className="divide-y divide-slate-700/60">{children}</tbody>
+                  ),
+                  tr: ({ children }: any) => (
+                    <tr className="even:bg-slate-800/30">{children}</tr>
+                  ),
+                  th: ({ children }: any) => (
+                    <th className="px-3 py-1.5 text-left font-semibold text-slate-200">{children}</th>
+                  ),
+                  td: ({ children }: any) => (
+                    <td className="px-3 py-1.5 text-slate-300">{children}</td>
+                  ),
+                  blockquote: ({ children }: any) => (
+                    <blockquote className="border-l-2 border-violet-500 pl-3 my-2 text-slate-400 italic">
+                      {children}
+                    </blockquote>
+                  ),
+                  hr: () => <hr className="border-slate-700 my-3" />,
+                }}
+              >
+                {problem.markdown_content || problem.description}
+              </ReactMarkdown>
             </div>
-            {problem.markdown_content && (
-              <div className="prose-sm prose-invert max-w-none">
-                <ReactMarkdown
-                  className="space-y-3 text-sm text-slate-300"
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  components={{
-                    code: ({ children }: any) => (
-                      <code className="rounded bg-slate-800 px-1.5 py-0.5 text-xs font-mono text-violet-300">
-                        {children}
-                      </code>
-                    ),
-                    pre: ({ children }: any) => (
-                      <pre className="overflow-x-auto rounded-lg bg-slate-900 border border-slate-700 p-3 text-xs">
-                        {children}
-                      </pre>
-                    ),
-                    h1: ({ children }: any) => (
-                      <h1 className="text-base font-bold text-white mt-4 mb-2">
-                        {children}
-                      </h1>
-                    ),
-                    h2: ({ children }: any) => (
-                      <h2 className="text-sm font-bold text-slate-200 mt-3 mb-1.5">
-                        {children}
-                      </h2>
-                    ),
-                    h3: ({ children }: any) => (
-                      <h3 className="text-xs font-semibold text-slate-300 mt-2 mb-1">
-                        {children}
-                      </h3>
-                    ),
-                    ul: ({ children }: any) => (
-                      <ul className="list-disc list-inside space-y-1 text-slate-300">
-                        {children}
-                      </ul>
-                    ),
-                    li: ({ children }: any) => (
-                      <li className="text-xs">{children}</li>
-                    ),
-                    strong: ({ children }: any) => (
-                      <strong className="text-white font-semibold">
-                        {children}
-                      </strong>
-                    ),
-                  }}
-                >
-                  {problem.markdown_content}
-                </ReactMarkdown>
-              </div>
-            )}
 
             {/* Coaching hints */}
             {hints.length > 0 && (
