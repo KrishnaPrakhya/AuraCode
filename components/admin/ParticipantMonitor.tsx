@@ -92,11 +92,16 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
       )
     : 0;
   const totalHints = records.reduce((s, r) => s + (r.total_hints_used ?? 0), 0);
+  const totalAICoachUses = records.reduce((s, r) => s + (r.ai_coach_uses ?? 0), 0);
+
+  // Penalty constants (must match Sandbox.tsx)
+  const HINT_PENALTY_PER_USE = 3;   // -3 pts per hint
+  const AI_COACH_PENALTY_PER_USE = 10; // -10 pts per AI Coach use
 
   return (
     <div className="flex h-full flex-col overflow-auto p-6 space-y-5">
       {/* Stats row */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
         <div className="rounded-xl border border-emerald-500/30 bg-linear-to-br from-emerald-900/30 to-emerald-800/20 backdrop-blur p-4 shadow">
           <div className="flex items-center gap-2 mb-1">
             <Users className="h-4 w-4 text-emerald-400" />
@@ -139,6 +144,16 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
             <p className="text-xs text-amber-300 font-medium">Hints Used</p>
           </div>
           <p className="text-2xl font-bold text-amber-400">{totalHints}</p>
+          <p className="text-[10px] text-amber-600 mt-0.5">-{HINT_PENALTY_PER_USE} pts each</p>
+        </div>
+
+        <div className="rounded-xl border border-violet-500/30 bg-linear-to-br from-violet-900/30 to-violet-800/20 backdrop-blur p-4 shadow">
+          <div className="flex items-center gap-2 mb-1">
+            <Zap className="h-4 w-4 text-violet-400" />
+            <p className="text-xs text-violet-300 font-medium">AI Coach Uses</p>
+          </div>
+          <p className="text-2xl font-bold text-violet-400">{totalAICoachUses}</p>
+          <p className="text-[10px] text-violet-600 mt-0.5">-{AI_COACH_PENALTY_PER_USE} pts each · max 2</p>
         </div>
       </div>
 
@@ -265,17 +280,23 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
                                 {/* Hints */}
                                 <td className="px-4 py-3 text-center">
                                   {r.total_hints_used > 0 ? (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-900/30 px-2 py-0.5 text-xs font-medium text-amber-300">
-                                      <Lightbulb className="h-3 w-3" />{r.total_hints_used}
-                                    </span>
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-900/30 px-2 py-0.5 text-xs font-medium text-amber-300">
+                                        <Lightbulb className="h-3 w-3" />{r.total_hints_used}
+                                      </span>
+                                      <span className="text-[10px] text-red-400">-{r.total_hints_used * HINT_PENALTY_PER_USE} pts</span>
+                                    </div>
                                   ) : <span className="text-slate-600 text-xs">—</span>}
                                 </td>
                                 {/* AI Coach */}
                                 <td className="px-4 py-3 text-center">
-                                  {r.ai_evaluate_used ? (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-300">
-                                      <Zap className="h-3 w-3" />used
-                                    </span>
+                                  {r.ai_coach_uses > 0 ? (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-300">
+                                        <Zap className="h-3 w-3" />{r.ai_coach_uses}×
+                                      </span>
+                                      <span className="text-[10px] text-red-400">-{r.ai_coach_uses * AI_COACH_PENALTY_PER_USE} pts</span>
+                                    </div>
                                   ) : <span className="text-slate-600 text-xs">—</span>}
                                 </td>
                                 {/* Score */}
@@ -283,8 +304,16 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
                                   <span className={`font-bold text-base ${scoreColor}`}>
                                     {r.points_earned > 0 ? r.points_earned : "—"}
                                   </span>
-                                  {r.hint_penalty > 0 && <span className="ml-1 text-xs text-red-400">-{r.hint_penalty}</span>}
-                                  {r.ai_evaluate_used && <span className="ml-1 text-[10px] text-violet-400">AI-20</span>}
+                                  {(r.hint_penalty > 0 || r.total_hints_used > 0) && (
+                                    <span className="ml-1 text-xs text-amber-400" title={`Hint penalty: ${r.total_hints_used} × ${HINT_PENALTY_PER_USE} pts`}>
+                                      H-{r.hint_penalty || r.total_hints_used * HINT_PENALTY_PER_USE}
+                                    </span>
+                                  )}
+                                  {r.ai_coach_uses > 0 && (
+                                    <span className="ml-1 text-xs text-violet-400" title={`AI Coach penalty: ${r.ai_coach_uses} × ${AI_COACH_PENALTY_PER_USE} pts`}>
+                                      AI-{r.ai_coach_uses * AI_COACH_PENALTY_PER_USE}
+                                    </span>
+                                  )}
                                 </td>
                                 {/* Time */}
                                 <td className="px-4 py-3 text-center text-slate-400 text-xs">
@@ -371,24 +400,38 @@ export function ParticipantMonitor(_props: ParticipantMonitorProps) {
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                   {r.total_hints_used > 0 ? (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-900/30 px-2 py-0.5 text-xs font-medium text-amber-300">
-                                      <Lightbulb className="h-3 w-3" />{r.total_hints_used}
-                                    </span>
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-900/30 px-2 py-0.5 text-xs font-medium text-amber-300">
+                                        <Lightbulb className="h-3 w-3" />{r.total_hints_used}
+                                      </span>
+                                      <span className="text-[10px] text-red-400">-{r.total_hints_used * HINT_PENALTY_PER_USE} pts</span>
+                                    </div>
                                   ) : <span className="text-slate-600 text-xs">—</span>}
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                  {r.ai_evaluate_used ? (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-300">
-                                      <Zap className="h-3 w-3" />used
-                                    </span>
+                                  {r.ai_coach_uses > 0 ? (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-300">
+                                        <Zap className="h-3 w-3" />{r.ai_coach_uses}×
+                                      </span>
+                                      <span className="text-[10px] text-red-400">-{r.ai_coach_uses * AI_COACH_PENALTY_PER_USE} pts</span>
+                                    </div>
                                   ) : <span className="text-slate-600 text-xs">—</span>}
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                   <span className={`font-bold text-base ${scoreColor}`}>
                                     {r.points_earned > 0 ? r.points_earned : "—"}
                                   </span>
-                                  {r.hint_penalty > 0 && <span className="ml-1 text-xs text-red-400">-{r.hint_penalty}</span>}
-                                  {r.ai_evaluate_used && <span className="ml-1 text-[10px] text-violet-400" title="AI Coach used: -20 pts applied">AI-20</span>}
+                                  {(r.hint_penalty > 0 || r.total_hints_used > 0) && (
+                                    <span className="ml-1 text-xs text-amber-400" title={`Hint penalty: ${r.total_hints_used} × ${HINT_PENALTY_PER_USE} pts`}>
+                                      H-{r.hint_penalty || r.total_hints_used * HINT_PENALTY_PER_USE}
+                                    </span>
+                                  )}
+                                  {r.ai_coach_uses > 0 && (
+                                    <span className="ml-1 text-xs text-violet-400" title={`AI Coach penalty: ${r.ai_coach_uses} × ${AI_COACH_PENALTY_PER_USE} pts`}>
+                                      AI-{r.ai_coach_uses * AI_COACH_PENALTY_PER_USE}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-3 text-center text-slate-400 text-xs">
                                   {r.elapsed_minutes < 60 ? `${r.elapsed_minutes}m` : `${Math.floor(r.elapsed_minutes / 60)}h ${r.elapsed_minutes % 60}m`}

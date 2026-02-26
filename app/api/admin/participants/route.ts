@@ -19,6 +19,9 @@ export interface ParticipantRecord {
   points_earned: number;
   total_hints_used: number;
   hint_penalty: number;
+  /** How many times the participant opened AI Coach (max 2) */
+  ai_coach_uses: number;
+  /** Legacy boolean — true if ai_coach_uses > 0 */
   ai_evaluate_used: boolean;
   elapsed_minutes: number;
   team_members: string[] | null;
@@ -93,6 +96,7 @@ export async function GET() {
         points_earned: s.points_earned ?? 0,
         total_hints_used: s.total_hints_used ?? 0,
         hint_penalty: s.hint_penalty ?? 0,
+        ai_coach_uses: (s as any).ai_coach_uses ?? (s.ai_pair_programmer_used ? 1 : 0),
         ai_evaluate_used: s.ai_pair_programmer_used ?? false,
         elapsed_minutes: elapsedMinutes,
         team_members: Array.isArray(s.team_members) ? s.team_members : null,

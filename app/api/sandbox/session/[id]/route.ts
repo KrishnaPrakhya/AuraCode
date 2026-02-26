@@ -21,6 +21,7 @@ export async function PATCH(
         ...(body.total_hints_used !== undefined && { total_hints_used: body.total_hints_used }),
         ...(body.hint_penalty !== undefined && { hint_penalty: body.hint_penalty }),
         ...(body.ai_pair_programmer_used !== undefined && { ai_pair_programmer_used: body.ai_pair_programmer_used }),
+        ...(body.ai_coach_uses !== undefined && { ai_coach_uses: body.ai_coach_uses }),
         ...(body.status !== undefined && { status: body.status }),
         ...(body.submitted_at !== undefined && { submitted_at: body.submitted_at }),
       })
